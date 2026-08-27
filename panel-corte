@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Corte — Plasma &amp; Láser</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root{
+    --bg:#f6f4ef;
+    --panel:#ffffff;
+    --panel-alt:#fbfaf7;
+    --border:#e5e1d8;
+    --border-soft:#ece9e0;
+    --text:#2c2a26;
+    --text-muted:#948e80;
+    --plasma:#d97a45;
+    --laser:#3f7f7c;
+    --espera:#cf9b3d;
+    --anadidos:#5678a3;
+    --cortados:#6ea675;
+    --danger:#c4564f;
+    --shadow: 0 1px 2px rgba(40,35,25,0.04), 0 4px 14px rgba(40,35,25,0.05);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding:24px;
+  }
+
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:1360px;margin:0 auto;}
+
+  .role-banner{
+    background:#eef3f0;border:1px solid #d7e4dd;color:#3f6b5c;
+    padding:9px 14px;border-radius:8px;font-size:12.5px;margin-bottom:16px;
+    display:flex;align-items:center;gap:8px;
+  }
+
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;
+    padding-bottom:20px;margin-bottom:22px;
+    border-bottom:1px solid var(--border);
+  }
+  .title-block h1{font-size:24px;margin:0;color:var(--text);font-weight:700;letter-spacing:-0.01em;}
+  .title-block .sub{color:var(--text-muted);font-size:13px;margin-top:5px;}
+
+  .stats{display:flex;gap:10px;flex-wrap:wrap;}
+  .stat{
+    background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);
+    padding:9px 16px;min-width:72px;text-align:center;
+  }
+  .stat .n{font-size:19px;font-weight:700;}
+  .stat .l{font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-top:2px;}
+  .stat.plasma .n{color:var(--plasma);}
+  .stat.laser .n{color:var(--laser);}
+
+  .toolbar{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;}
+  button{font-family:'Inter';cursor:pointer;border:none;border-radius:7px;font-weight:600;font-size:13px;}
+  .btn-primary{background:var(--text);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:8px;}
+  .btn-primary:hover{background:#454138;}
+  .btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border);padding:10px 16px;}
+  .btn-secondary:hover{border-color:var(--text-muted);}
+  .btn-ghost{background:transparent;color:var(--text-muted);padding:6px 10px;font-size:11.5px;text-decoration:underline;}
+  .btn-ghost:hover{color:var(--text);}
+
+  .board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;align-items:start;}
+  @media(max-width:900px){.board{grid-template-columns:1fr;}}
+
+  .column{background:var(--panel-alt);border:1px solid var(--border-soft);border-radius:12px;min-height:200px;}
+  .col-head{padding:14px 16px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;}
+  .col-head h2{font-size:13.5px;margin:0;display:flex;align-items:center;gap:8px;font-weight:600;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .dot.espera{background:var(--espera);}
+  .dot.anadidos{background:var(--anadidos);}
+  .dot.cortados{background:var(--cortados);}
+  .col-count{font-size:11px;color:var(--text-muted);background:var(--panel);padding:2px 9px;border-radius:10px;border:1px solid var(--border-soft);}
+  .col-body{padding:12px;display:flex;flex-direction:column;gap:10px;min-height:120px;}
+  .col-body.drag-over{background:#eef3f0;border-radius:8px;}
+  .empty-msg{color:var(--text-muted);font-size:12px;text-align:center;padding:26px 8px;border:1px dashed var(--border);border-radius:8px;}
+
+  .card{position:relative;border-radius:10px;padding:12px;cursor:pointer;background:var(--panel);box-shadow:var(--shadow);border-left:4px solid var(--border);}
+  .card.has-plasma{border-left-color:var(--plasma);}
+  .card.has-laser{border-left-color:var(--laser);}
+  .card-top{display:flex;gap:10px;}
+  .card-img{width:50px;height:50px;border-radius:6px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;background:var(--panel-alt);}
+  .card-img-empty{width:50px;height:50px;border-radius:6px;border:1px dashed var(--border-soft);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:9px;text-align:center;}
+  .card-info{flex:1;min-width:0;}
+  .card-code{font-size:14px;font-weight:600;color:var(--text);word-break:break-word;}
+  .card-meta{font-size:11.5px;color:var(--text-muted);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  .badge{display:inline-block;padding:1.5px 8px;border-radius:9px;font-size:10px;font-weight:600;}
+  .badge.plasma{background:#fbeee5;color:var(--plasma);}
+  .badge.laser{background:#e7f1f0;color:var(--laser);}
+
+  .progress-row{margin-top:10px;}
+  .progress-text{font-size:11px;color:var(--text-muted);margin-bottom:4px;display:flex;justify-content:space-between;}
+  .progress-bar{height:5px;border-radius:3px;background:var(--border-soft);overflow:hidden;}
+  .progress-fill{height:100%;background:var(--cortados);border-radius:3px;transition:width 0.25s;}
+
+  .card-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid var(--border-soft);}
+  .move-btns{display:flex;gap:5px;}
+  .icon-btn{background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text-muted);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .icon-btn:hover{color:var(--text);border-color:var(--text-muted);}
+  .icon-btn:disabled{opacity:0.3;cursor:not-allowed;}
+  .icon-btn.del{color:var(--danger);}
+  .icon-btn.del:hover{border-color:var(--danger);}
+
+  .overlay{position:fixed;inset:0;background:rgba(44,42,38,0.35);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 12px 40px rgba(40,35,25,0.18);}
+  .modal h2{font-size:17px;margin:0 0 4px;font-weight:700;}
+  .modal .modal-sub{font-size:12px;color:var(--text-muted);margin-bottom:18px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;}
+  .field input[type=text],.field input[type=number]{width:100%;background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text);padding:9px 10px;border-radius:7px;font-family:'Inter';font-size:13px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .type-toggle{display:flex;gap:6px;}
+  .type-toggle button{flex:1;padding:7px;border:1px solid var(--border-soft);background:var(--panel-alt);color:var(--text-muted);font-size:12px;}
+  .type-toggle button.active.plasma{background:#fbeee5;border-color:var(--plasma);color:var(--plasma);}
+  .type-toggle button.active.laser{background:#e7f1f0;border-color:var(--laser);color:var(--laser);}
+  .img-drop{border:1px dashed var(--border);border-radius:8px;padding:14px;text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer;position:relative;}
+  .img-preview{max-height:100px;border-radius:6px;margin-top:8px;}
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .modal-actions button{flex:1;padding:11px;}
+  .hint{font-size:11px;color:var(--text-muted);margin-top:6px;line-height:1.5;}
+  .close-x{position:absolute;top:16px;right:16px;background:none;color:var(--text-muted);font-size:18px;width:28px;height:28px;}
+
+  .piece-rows{display:flex;flex-direction:column;gap:10px;margin-bottom:6px;}
+  .piece-row{border:1px solid var(--border-soft);border-radius:8px;padding:10px;background:var(--panel-alt);position:relative;}
+  .piece-row .row2{margin-bottom:8px;}
+  .piece-row .remove-row{position:absolute;top:8px;right:8px;background:none;color:var(--text-muted);font-size:13px;width:20px;height:20px;}
+  .piece-row .remove-row:hover{color:var(--danger);}
+  .add-row-btn{border:1px dashed var(--border);background:transparent;color:var(--text-muted);padding:9px;border-radius:8px;font-size:12.5px;width:100%;margin-bottom:16px;}
+  .add-row-btn:hover{color:var(--text);border-color:var(--text-muted);}
+
+  .dxf-picker{
+    border:1px dashed var(--border);border-radius:7px;padding:8px 10px;font-size:11.5px;color:var(--text-muted);
+    cursor:pointer;display:flex;align-items:center;gap:6px;background:var(--panel);
+  }
+  .dxf-picker:hover{border-color:var(--text-muted);}
+  .dxf-picker.has-file{color:var(--laser);border-color:var(--laser);background:#e7f1f0;}
+
+  .detail-img{width:100%;max-height:180px;object-fit:cover;border-radius:8px;border:1px solid var(--border-soft);margin-bottom:14px;background:var(--panel-alt);}
+  .detail-img-empty{width:100%;height:90px;border-radius:8px;border:1px dashed var(--border-soft);margin-bottom:14px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;}
+  .checklist{display:flex;flex-direction:column;gap:8px;margin-bottom:8px;}
+  .check-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border-soft);border-radius:8px;background:var(--panel-alt);cursor:pointer;user-select:none;}
+  .check-row.done{background:#f0f6f1;border-color:#d9e8db;}
+  .checkbox{width:20px;height:20px;border-radius:5px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;background:#fff;}
+  .check-row.done .checkbox{background:var(--cortados);border-color:var(--cortados);}
+  .check-info{flex:1;min-width:0;}
+  .check-code{font-size:13.5px;font-weight:600;}
+  .check-row.done .check-code{text-decoration:line-through;color:var(--text-muted);}
+  .check-meta{font-size:11px;color:var(--text-muted);margin-top:2px;display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+  .dxf-pill{
+    display:inline-flex;align-items:center;gap:4px;background:#e7f1f0;color:var(--laser);
+    padding:1.5px 8px;border-radius:9px;font-size:10px;font-weight:600;border:none;cursor:pointer;
+  }
+  .dxf-pill:hover{background:#d9e9e7;}
+  .check-del{background:none;color:var(--text-muted);font-size:13px;width:22px;height:22px;flex-shrink:0;}
+  .check-del:hover{color:var(--danger);}
+  .check-edit{background:none;color:var(--text-muted);font-size:13px;width:22px;height:22px;flex-shrink:0;}
+  .check-edit:hover{color:var(--text);}
+  .check-row-actions{display:flex;gap:2px;flex-shrink:0;}
+
+  .add-piece-inline{border-top:1px dashed var(--border);margin-top:14px;padding-top:14px;}
+  .add-piece-inline h3{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin:0 0 10px;font-weight:600;}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);border:1px solid var(--text);padding:10px 18px;border-radius:8px;font-size:12px;color:#fff;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:60;display:flex;align-items:center;gap:10px;max-width:90vw;}
+  .toast.show{opacity:1;pointer-events:auto;}
+  .toast.err{background:var(--danger);border-color:var(--danger);}
+  .toast button{background:rgba(255,255,255,0.2);color:#fff;padding:4px 9px;font-size:11px;flex-shrink:0;}
+
+  .loading{color:var(--text-muted);font-size:13px;text-align:center;padding:40px;}
+
+  .confirm-modal{max-width:360px;text-align:center;}
+  .confirm-modal p{font-size:14px;line-height:1.5;margin:0 0 20px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="role-banner" id="roleBanner" style="display:none">
+    👁 Estás viendo el panel en modo <b>corte</b>: podés abrir cada dispositivo, tildar las piezas que vas cortando, descargar sus DXF y mover dispositivos entre columnas.
+  </div>
+
+  <header>
+    <div class="title-block">
+      <h1>Panel de Corte</h1>
+      <div class="sub">Mapa visual de dispositivos — corte por Plasma y Láser</div>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="toolbar" id="toolbar">
+    <button class="btn-primary" onclick="openCreateModal()">＋ Nuevo dispositivo</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="loading">Cargando dispositivos…</div>
+  </div>
+
+</div>
+
+<!-- Modal: nuevo dispositivo -->
+<div class="overlay" id="createOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="closeCreateModal()">✕</button>
+    <h2>Nuevo dispositivo</h2>
+    <div class="modal-sub">Cargá el dispositivo y andá agregando todas sus piezas.</div>
+
+    <div class="field">
+      <label>Código / nombre del dispositivo</label>
+      <input type="text" id="d-code" placeholder="Ej: DISPOSITIVO-014">
+    </div>
+    <div class="field">
+      <label>Imagen (opcional)</label>
+      <div class="img-drop" onclick="document.getElementById('d-img').click()">
+        <span id="imgDropText">Tocar para elegir imagen</span>
+        <input type="file" id="d-img" accept="image/*" style="display:none" onchange="handleImagePick(event)">
+        <div><img id="imgPreview" class="img-preview" style="display:none"></div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Piezas del dispositivo</label>
+      <div class="piece-rows" id="pieceRows"></div>
+      <button type="button" class="add-row-btn" onclick="addPieceRow()">＋ Agregar otra pieza</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
+      <button class="btn-primary" onclick="submitDevice()">Crear dispositivo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalle del dispositivo -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <button class="close-x" onclick="closeDetailModal()">✕</button>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding-right:26px">
+      <div style="flex:1;min-width:0">
+        <h2 id="detailCode"></h2>
+        <div class="modal-sub" id="detailSub"></div>
+      </div>
+      <button class="btn-ghost" id="editDeviceBtn" onclick="toggleEditDevice()" style="flex-shrink:0">✎ Editar</button>
+    </div>
+
+    <div id="editDeviceForm" style="display:none;margin-bottom:16px">
+      <div class="field">
+        <label>Código / nombre del dispositivo</label>
+        <input type="text" id="ed-code">
+      </div>
+      <div class="field">
+        <label>Imagen</label>
+        <div class="img-drop" onclick="document.getElementById('ed-img').click()">
+          <span id="edImgDropText">Tocar para elegir imagen</span>
+          <input type="file" id="ed-img" accept="image/*" style="display:none" onchange="handleEdImagePick(event)">
+          <div><img id="edImgPreview" class="img-preview" style="display:none"></div>
+        </div>
+        <button class="btn-ghost" id="edRemoveImgBtn" onclick="markRemoveDeviceImage()" style="margin-top:6px">Quitar imagen actual</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="cancelEditDevice()">Cancelar</button>
+        <button class="btn-primary" onclick="saveEditDevice()">Guardar cambios</button>
+      </div>
+    </div>
+
+    <div id="detailImgWrap"></div>
+
+    <div class="checklist" id="detailChecklist"></div>
+
+    <div class="add-piece-inline" id="adminAddPiece">
+      <h3 id="addPieceTitle">Agregar otra pieza a este dispositivo</h3>
+      <div class="row2">
+        <div class="field"><input type="text" id="ap-code" placeholder="Código de pieza"></div>
+        <div class="field"><input type="number" id="ap-thickness" placeholder="Espesor mm" step="0.1" min="0"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><input type="number" id="ap-qty" placeholder="Cantidad" min="1" value="1"></div>
+        <div class="type-toggle">
+          <button type="button" id="apPlasma" class="plasma" onclick="setApType('plasma')">Plasma</button>
+          <button type="button" id="apLaser" class="laser" onclick="setApType('laser')">Láser</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="dxf-picker" id="apDxfPicker" onclick="document.getElementById('ap-dxf').click()">
+          <span id="apDxfLabel">📎 Adjuntar DXF (opcional)</span>
+        </div>
+        <input type="file" id="ap-dxf" accept=".dxf" style="display:none" onchange="handleApDxfPick(event)">
+        <button class="btn-ghost" id="apRemoveDxfBtn" onclick="markRemoveDxf()" style="display:none;margin-top:6px">Quitar DXF actual</button>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="apCancelBtn" onclick="cancelEditPiece()" style="display:none">Cancelar edición</button>
+        <button class="btn-primary" id="apSubmitBtn" style="width:100%" onclick="submitAddPiece()">Agregar pieza</button>
+      </div>
+    </div>
+
+    <div class="modal-actions" id="detailActions" style="margin-top:18px">
+      <button class="btn-secondary" style="color:var(--danger)" onclick="deleteDeviceFromDetail()" id="deleteDeviceBtn">Eliminar dispositivo</button>
+      <button class="btn-primary" onclick="closeDetailModal()">Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: confirmar acción -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal confirm-modal">
+    <p id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="confirmNo">Cancelar</button>
+      <button class="btn-primary" style="background:var(--danger)" id="confirmYes">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAGfRsHlV_6xpzshygUWW13CEPRCflP9GE",
+  authDomain: "panel-corte.firebaseapp.com",
+  projectId: "panel-corte",
+  storageBucket: "panel-corte.firebasestorage.app",
+  messagingSenderId: "383812281538",
+  appId: "1:383812281538:web:58bf18db93a3bd9731475b"
+};
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+
+/* mapea las mismas "claves" que usaba antes (META_KEY, 'img:xxx', 'dxf:xxx')
+   a documentos de Firestore, para no tener que tocar el resto del código */
+function keyToRef(key){
+  if(key === META_KEY) return doc(db, 'panel', 'meta');
+  if(key.startsWith('img:')) return doc(db, 'images', key.slice(4));
+  if(key.startsWith('dxf:')) return doc(db, 'dxf', key.slice(4));
+  return doc(db, 'misc', key);
+}
+async function storageGet(key){
+  const snap = await getDoc(keyToRef(key));
+  return snap.exists() ? { value: snap.data().value } : null;
+}
+async function storageSet(key, value){
+  await setDoc(keyToRef(key), { value, updatedAt: Date.now() });
+  return { value };
+}
+async function storageDelete(key){
+  await deleteDoc(keyToRef(key));
+}
+const META_KEY = 'board-devices';
+let devices = [];          // metadata only — sin imágenes ni DXF (eso vive en claves separadas)
+let imageCache = {};       // deviceId -> dataURL
+let pendingImage = null;
+let rowCounter = 0;
+let createDxfMap = {};     // rowId -> {name, data}
+let apType = 'plasma';
+let apDxf = null;
+let openDeviceId = null;
+
+const params = new URLSearchParams(window.location.search);
+const isCutterView = params.get('rol') === 'corte';
+
+const COLUMNS = [
+  {id:'espera', label:'En espera'},
+  {id:'anadidos', label:'Añadidos'},
+  {id:'cortados', label:'Cortados'}
+];
+
+function uid(prefix){ return (prefix||'id') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+
+/* ---------- confirmación (propia, sin confirm() nativo — bloqueado dentro del artefacto) ---------- */
+function askConfirm(message){
+  return new Promise(resolve=>{
+    const overlay = document.getElementById('confirmOverlay');
+    document.getElementById('confirmMsg').textContent = message;
+    overlay.classList.add('open');
+    const yes = document.getElementById('confirmYes');
+    const no = document.getElementById('confirmNo');
+    const cleanup = (result)=>{
+      overlay.classList.remove('open');
+      yes.onclick = null; no.onclick = null;
+      resolve(result);
+    };
+    yes.onclick = ()=> cleanup(true);
+    no.onclick = ()=> cleanup(false);
+  });
+}
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function showToast(msg, isErr, retryFn){
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.querySelectorAll('button').forEach(b=>b.remove());
+  if(retryFn){
+    const btn = document.createElement('button');
+    btn.textContent = 'Reintentar';
+    btn.onclick = ()=>{ t.className='toast'; retryFn(); };
+    t.appendChild(btn);
+  }
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toastTimer);
+  if(!retryFn){ toastTimer = setTimeout(()=> t.className = 'toast', 2600); }
+}
+
+/* ---------- almacenamiento ----------
+   - META_KEY: lista liviana de dispositivos y piezas (sin archivos)
+   - img:<deviceId>: imagen del dispositivo
+   - dxf:<pieceId>: { name, data } del plano de la pieza
+   Separar los archivos pesados de la lista principal hace que cada guardado
+   sea chico y reduce los "error al guardar". */
+let saveChain = Promise.resolve();
+function queueSave(){
+  saveChain = saveChain.then(()=> saveMetaWithRetry());
+  return saveChain;
+}
+async function saveMetaWithRetry(attempt){
+  attempt = attempt || 1;
+  try{
+    const result = await storageSet(META_KEY, JSON.stringify(devices));
+    if(result) return true;
+    throw new Error('sin resultado');
+  }catch(e){
+    if(attempt < 3){
+      await new Promise(r=> setTimeout(r, 500*attempt));
+      return saveMetaWithRetry(attempt+1);
+    }
+    showToast('No se pudo guardar el último cambio.', true, ()=> queueSave());
+    return false;
+  }
+}
+async function setFile(key, value){
+  try{ return await storageSet(key, value); }
+  catch(e){ return null; }
+}
+async function deleteFile(key){
+  try{ await storageDelete(key); }catch(e){}
+}
+
+async function loadDevices(){
+  try{
+    const res = await storageGet(META_KEY);
+    devices = res && res.value ? JSON.parse(res.value) : [];
+  }catch(e){
+    devices = [];
+  }
+  if(isCutterView){
+    document.getElementById('toolbar').style.display = 'none';
+    document.getElementById('roleBanner').style.display = 'flex';
+  }
+  render();
+  // cargar imágenes en paralelo, una sola vez
+  const withImg = devices.filter(d=>d.hasImage);
+  await Promise.all(withImg.map(async d=>{
+    try{
+      const res = await storageGet('img:'+d.id);
+      if(res && res.value) imageCache[d.id] = res.value;
+    }catch(e){}
+  }));
+  if(withImg.length) render();
+}
+
+/* ---------- render tablero ---------- */
+function pieceStats(dev){
+  const total = dev.pieces.length;
+  const done = dev.pieces.filter(p=>p.done).length;
+  const plasma = dev.pieces.filter(p=>p.cutType==='plasma').length;
+  const laser = dev.pieces.filter(p=>p.cutType==='laser').length;
+  return {total, done, plasma, laser};
+}
+
+function render(){
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  COLUMNS.forEach(col=>{
+    const items = devices.filter(d=>d.status===col.id);
+    const colEl = document.createElement('div');
+    colEl.className = 'column';
+    colEl.innerHTML = `
+      <div class="col-head">
+        <h2><span class="dot ${col.id}"></span>${col.label}</h2>
+        <span class="col-count">${items.length}</span>
+      </div>
+      <div class="col-body" data-col="${col.id}"></div>
+    `;
+    const body = colEl.querySelector('.col-body');
+    body.addEventListener('dragover', e=>{ e.preventDefault(); body.classList.add('drag-over'); });
+    body.addEventListener('dragleave', ()=> body.classList.remove('drag-over'));
+    body.addEventListener('drop', e=>{
+      e.preventDefault();
+      body.classList.remove('drag-over');
+      if(window._dragId) moveDeviceTo(window._dragId, col.id);
+    });
+
+    if(items.length===0){
+      body.innerHTML = `<div class="empty-msg">Sin dispositivos acá</div>`;
+    }else{
+      items.forEach(d=> body.appendChild(renderCard(d, col.id)));
+    }
+    board.appendChild(colEl);
+  });
+  renderStats();
+}
+
+function renderCard(d, colId){
+  const idx = COLUMNS.findIndex(c=>c.id===colId);
+  const s = pieceStats(d);
+  const pct = s.total ? Math.round((s.done/s.total)*100) : 0;
+
+  const card = document.createElement('div');
+  card.className = 'card' + (s.plasma?' has-plasma':'') + (s.laser?' has-laser':'');
+  card.draggable = true;
+  card.addEventListener('dragstart', ()=> window._dragId = d.id);
+  card.addEventListener('dragend', ()=> window._dragId = null);
+  card.addEventListener('click', (e)=>{
+    if(e.target.closest('.icon-btn')) return;
+    openDetailModal(d.id);
+  });
+
+  const imgSrc = imageCache[d.id];
+  const imgHtml = imgSrc ? `<img src="${imgSrc}" class="card-img">` : `<div class="card-img-empty">${d.hasImage?'cargando…':'sin foto'}</div>`;
+  const delBtn = isCutterView ? '' : `<button class="icon-btn del" title="Eliminar dispositivo" onclick="event.stopPropagation(); deleteDevice('${d.id}')">🗑</button>`;
+
+  card.innerHTML = `
+    <div class="card-top">
+      ${imgHtml}
+      <div class="card-info">
+        <div class="card-code mono">${escapeHtml(d.code)}</div>
+        <div class="card-meta">
+          ${s.plasma?`<span class="badge plasma">${s.plasma} plasma</span>`:''}
+          ${s.laser?`<span class="badge laser">${s.laser} láser</span>`:''}
+          ${s.total===0?'<span>Sin piezas cargadas</span>':''}
+        </div>
+      </div>
+    </div>
+    ${s.total ? `
+    <div class="progress-row">
+      <div class="progress-text"><span>${s.done}/${s.total} piezas cortadas</span><span>${pct}%</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    </div>` : ''}
+    <div class="card-actions">
+      <div class="move-btns">
+        <button class="icon-btn" title="Mover atrás" ${idx===0?'disabled':''} onclick="event.stopPropagation(); moveDeviceTo('${d.id}','${idx>0?COLUMNS[idx-1].id:''}')">←</button>
+        <button class="icon-btn" title="Mover adelante" ${idx===COLUMNS.length-1?'disabled':''} onclick="event.stopPropagation(); moveDeviceTo('${d.id}','${idx<COLUMNS.length-1?COLUMNS[idx+1].id:''}')">→</button>
+      </div>
+      ${delBtn}
+    </div>
+  `;
+  return card;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderStats(){
+  const totalDev = devices.length;
+  const pendientesDev = devices.filter(d=>d.status!=='cortados').length;
+  let plasma=0, laser=0;
+  devices.forEach(d=> d.pieces.forEach(p=>{ if(p.cutType==='plasma') plasma++; else if(p.cutType==='laser') laser++; }));
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="n">${totalDev}</div><div class="l">Dispositivos</div></div>
+    <div class="stat"><div class="n">${pendientesDev}</div><div class="l">Pendientes</div></div>
+    <div class="stat plasma"><div class="n">${plasma}</div><div class="l">Piezas plasma</div></div>
+    <div class="stat laser"><div class="n">${laser}</div><div class="l">Piezas láser</div></div>
+  `;
+}
+
+async function moveDeviceTo(id, newStatus){
+  if(!newStatus) return;
+  const d = devices.find(x=>x.id===id);
+  if(!d) return;
+  d.status = newStatus;
+  render();
+  await queueSave();
+}
+
+async function deleteDevice(id){
+  if(isCutterView) return;
+  const ok = await askConfirm('¿Eliminar este dispositivo y todas sus piezas del panel?');
+  if(!ok) return;
+  const d = devices.find(x=>x.id===id);
+  devices = devices.filter(x=>x.id!==id);
+  render();
+  await queueSave();
+  if(d){
+    if(d.hasImage) deleteFile('img:'+d.id);
+    d.pieces.forEach(p=>{ if(p.hasDxf) deleteFile('dxf:'+p.id); });
+  }
+  showToast('Dispositivo eliminado.');
+}
+
+/* ---------- crear dispositivo ---------- */
+function openCreateModal(){
+  if(isCutterView) return;
+  document.getElementById('createOverlay').classList.add('open');
+  document.getElementById('d-code').value='';
+  pendingImage = null;
+  document.getElementById('imgPreview').style.display='none';
+  document.getElementById('imgDropText').style.display='block';
+  document.getElementById('pieceRows').innerHTML='';
+  rowCounter = 0;
+  createDxfMap = {};
+  addPieceRow();
+}
+function closeCreateModal(){
+  document.getElementById('createOverlay').classList.remove('open');
+}
+
+function addPieceRow(){
+  rowCounter++;
+  const rid = 'row_' + rowCounter;
+  const wrap = document.createElement('div');
+  wrap.className = 'piece-row';
+  wrap.id = rid;
+  wrap.dataset.type = 'plasma';
+  wrap.innerHTML = `
+    <button type="button" class="remove-row" onclick="document.getElementById('${rid}').remove(); delete createDxfMap['${rid}'];">✕</button>
+    <div class="row2">
+      <div class="field" style="margin-bottom:0"><input type="text" class="p-code" placeholder="Código de pieza"></div>
+      <div class="field" style="margin-bottom:0"><input type="number" class="p-thickness" placeholder="Espesor mm" step="0.1" min="0"></div>
+    </div>
+    <div class="row2">
+      <div class="field" style="margin-bottom:0"><input type="number" class="p-qty" placeholder="Cantidad" min="1" value="1"></div>
+      <div class="type-toggle">
+        <button type="button" class="plasma active" onclick="setRowType(this,'plasma')">Plasma</button>
+        <button type="button" class="laser" onclick="setRowType(this,'laser')">Láser</button>
+      </div>
+    </div>
+    <div class="dxf-picker" id="${rid}_dxfPicker" onclick="document.getElementById('${rid}_dxfInput').click()">
+      <span id="${rid}_dxfLabel">📎 Adjuntar DXF (opcional)</span>
+    </div>
+    <input type="file" id="${rid}_dxfInput" accept=".dxf" style="display:none" onchange="handleRowDxfPick(event,'${rid}')">
+  `;
+  document.getElementById('pieceRows').appendChild(wrap);
+}
+function setRowType(btn, type){
+  const row = btn.closest('.piece-row');
+  row.dataset.type = type;
+  row.querySelectorAll('.type-toggle button').forEach(b=> b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function readFileAsDataUrl(file, cb){
+  const reader = new FileReader();
+  reader.onload = ev => cb(ev.target.result);
+  reader.readAsDataURL(file);
+}
+function handleRowDxfPick(e, rid){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 650*1024){
+    showToast('Ese DXF pesa más de 650 KB (límite de Firestore), probá con uno más liviano.', true);
+    e.target.value='';
+    return;
+  }
+  readFileAsDataUrl(file, dataUrl=>{
+    createDxfMap[rid] = {name:file.name, data:dataUrl};
+    const picker = document.getElementById(rid+'_dxfPicker');
+    document.getElementById(rid+'_dxfLabel').textContent = '📎 ' + file.name;
+    picker.classList.add('has-file');
+  });
+}
+function handleApDxfPick(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 650*1024){
+    showToast('Ese DXF pesa más de 650 KB (límite de Firestore), probá con uno más liviano.', true);
+    e.target.value='';
+    return;
+  }
+  readFileAsDataUrl(file, dataUrl=>{
+    apDxf = {name:file.name, data:dataUrl};
+    document.getElementById('apDxfLabel').textContent = '📎 ' + file.name;
+    document.getElementById('apDxfPicker').classList.add('has-file');
+  });
+}
+
+function handleImagePick(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  compressImage(file, (dataUrl)=>{
+    pendingImage = dataUrl;
+    const prev = document.getElementById('imgPreview');
+    prev.src = dataUrl;
+    prev.style.display = 'block';
+    document.getElementById('imgDropText').style.display='none';
+  });
+}
+function compressImage(file, cb){
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = new Image();
+    img.onload = function(){
+      const maxW = 320;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      cb(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function submitDevice(){
+  const code = document.getElementById('d-code').value.trim();
+  if(!code){ showToast('Ponele un código o nombre al dispositivo.', true); return; }
+
+  const rows = document.querySelectorAll('#pieceRows .piece-row');
+  const pieces = [];
+  const dxfToSave = [];
+  rows.forEach(row=>{
+    const c = row.querySelector('.p-code').value.trim();
+    const th = row.querySelector('.p-thickness').value.trim();
+    const q = row.querySelector('.p-qty').value.trim();
+    const type = row.dataset.type;
+    if(c && th && q){
+      const pieceId = uid('pz');
+      const dxf = createDxfMap[row.id];
+      pieces.push({ id:pieceId, code:c, thickness:Number(th), qty:Number(q), cutType:type, done:false, hasDxf:!!dxf, dxfName: dxf?dxf.name:null });
+      if(dxf) dxfToSave.push({id:pieceId, data:dxf});
+    }
+  });
+
+  const deviceId = uid('dev');
+  devices.push({
+    id: deviceId, code, hasImage: !!pendingImage,
+    status:'espera', createdAt: Date.now(), pieces
+  });
+  const imgToSave = pendingImage;
+  if(imgToSave) imageCache[deviceId] = imgToSave;
+
+  closeCreateModal();
+  render();
+  await queueSave();
+  if(imgToSave) await setFile('img:'+deviceId, imgToSave);
+  for(const dx of dxfToSave){ await setFile('dxf:'+dx.id, JSON.stringify(dx.data)); }
+  showToast('Dispositivo creado.');
+}
+
+/* ---------- detalle / checklist ---------- */
+function openDetailModal(id){
+  openDeviceId = id;
+  renderDetail();
+  document.getElementById('detailOverlay').classList.add('open');
+}
+function closeDetailModal(){
+  document.getElementById('detailOverlay').classList.remove('open');
+  openDeviceId = null;
+}
+function renderDetail(){
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d){ closeDetailModal(); return; }
+  const s = pieceStats(d);
+  document.getElementById('editDeviceForm').style.display = 'none';
+  document.getElementById('detailImgWrap').style.display = 'block';
+
+  document.getElementById('detailCode').textContent = d.code;
+  document.getElementById('detailSub').textContent = s.total ? `${s.done}/${s.total} piezas cortadas` : 'Todavía no tiene piezas cargadas';
+
+  const imgSrc = imageCache[d.id];
+  document.getElementById('detailImgWrap').innerHTML = imgSrc
+    ? `<img src="${imgSrc}" class="detail-img">`
+    : `<div class="detail-img-empty">${d.hasImage?'Cargando imagen…':'Sin imagen'}</div>`;
+
+  const list = document.getElementById('detailChecklist');
+  list.innerHTML = '';
+  d.pieces.forEach(p=>{
+    const row = document.createElement('div');
+    row.className = 'check-row' + (p.done ? ' done' : '');
+    const editHtml = isCutterView ? '' : `<button class="check-edit" title="Editar pieza" onclick="event.stopPropagation(); startEditPiece('${p.id}')">✎</button>`;
+    const delHtml = isCutterView ? '' : `<button class="check-del" title="Quitar pieza" onclick="event.stopPropagation(); removePiece('${p.id}')">✕</button>`;
+    const dxfHtml = p.hasDxf ? `<button class="dxf-pill" onclick="event.stopPropagation(); downloadDxf('${p.id}','${escapeHtml(p.dxfName||'plano.dxf')}')">📎 DXF</button>` : '';
+    row.innerHTML = `
+      <div class="checkbox">${p.done ? '✓' : ''}</div>
+      <div class="check-info">
+        <div class="check-code mono">${escapeHtml(p.code)}</div>
+        <div class="check-meta">
+          <span>${p.thickness} mm</span><span>×${p.qty}</span>
+          <span class="badge ${p.cutType}">${p.cutType==='laser'?'Láser':'Plasma'}</span>
+          ${dxfHtml}
+        </div>
+      </div>
+      <div class="check-row-actions">${editHtml}${delHtml}</div>
+    `;
+    row.addEventListener('click', (e)=>{
+      if(e.target.closest('.check-del') || e.target.closest('.check-edit') || e.target.closest('.dxf-pill')) return;
+      togglePiece(p.id);
+    });
+    list.appendChild(row);
+  });
+
+  document.getElementById('adminAddPiece').style.display = isCutterView ? 'none' : 'block';
+  document.getElementById('deleteDeviceBtn').style.display = isCutterView ? 'none' : 'block';
+  document.getElementById('editDeviceBtn').style.display = isCutterView ? 'none' : 'inline-flex';
+  cancelEditPiece();
+}
+
+async function downloadDxf(pieceId, filename){
+  showToast('Descargando DXF…');
+  try{
+    const res = await storageGet('dxf:'+pieceId);
+    if(!res || !res.value){ showToast('No se encontró el archivo.', true); return; }
+    const stored = JSON.parse(res.value); // { name, data: dataURL }
+    if(!stored || !stored.data){ showToast('El archivo guardado está incompleto.', true); return; }
+    const a = document.createElement('a');
+    a.href = stored.data;
+    a.download = stored.name || filename || 'plano.dxf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }catch(e){
+    showToast('No se pudo descargar el DXF.', true, ()=> downloadDxf(pieceId, filename));
+  }
+}
+
+async function togglePiece(pieceId){
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d) return;
+  const p = d.pieces.find(x=>x.id===pieceId);
+  if(!p) return;
+  p.done = !p.done;
+
+  const s = pieceStats(d);
+  if(s.total>0 && s.done===s.total && d.status!=='cortados'){
+    d.status = 'cortados';
+    showToast('Todas las piezas cortadas — dispositivo movido a "Cortados".');
+  }
+
+  renderDetail();
+  render();
+  await queueSave();
+}
+
+async function removePiece(pieceId){
+  if(isCutterView) return;
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d) return;
+  const p = d.pieces.find(x=>x.id===pieceId);
+  d.pieces = d.pieces.filter(x=>x.id!==pieceId);
+  renderDetail();
+  render();
+  await queueSave();
+  if(p && p.hasDxf) deleteFile('dxf:'+p.id);
+}
+
+async function deleteDeviceFromDetail(){
+  if(isCutterView) return;
+  const ok = await askConfirm('¿Eliminar este dispositivo y todas sus piezas del panel?');
+  if(!ok) return;
+  const d = devices.find(x=>x.id===openDeviceId);
+  devices = devices.filter(x=>x.id!==openDeviceId);
+  closeDetailModal();
+  render();
+  await queueSave();
+  if(d){
+    if(d.hasImage) deleteFile('img:'+d.id);
+    d.pieces.forEach(p=>{ if(p.hasDxf) deleteFile('dxf:'+p.id); });
+  }
+  showToast('Dispositivo eliminado.');
+}
+
+function setApType(t){
+  apType = t;
+  document.getElementById('apPlasma').classList.toggle('active', t==='plasma');
+  document.getElementById('apLaser').classList.toggle('active', t==='laser');
+}
+
+/* ---------- editar pieza ---------- */
+let editingPieceId = null;
+let removeDxfFlag = false;
+
+function startEditPiece(pieceId){
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d) return;
+  const p = d.pieces.find(x=>x.id===pieceId);
+  if(!p) return;
+  editingPieceId = pieceId;
+  removeDxfFlag = false;
+  apDxf = null;
+
+  document.getElementById('ap-code').value = p.code;
+  document.getElementById('ap-thickness').value = p.thickness;
+  document.getElementById('ap-qty').value = p.qty;
+  setApType(p.cutType);
+
+  document.getElementById('apDxfLabel').textContent = p.hasDxf ? ('📎 ' + p.dxfName + ' — tocar para reemplazar') : '📎 Adjuntar DXF (opcional)';
+  document.getElementById('apDxfPicker').classList.toggle('has-file', !!p.hasDxf);
+  document.getElementById('apRemoveDxfBtn').style.display = p.hasDxf ? 'inline-block' : 'none';
+
+  document.getElementById('addPieceTitle').textContent = 'Editando pieza';
+  document.getElementById('apSubmitBtn').textContent = 'Guardar cambios';
+  document.getElementById('apCancelBtn').style.display = 'inline-block';
+
+  document.getElementById('adminAddPiece').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function cancelEditPiece(){
+  editingPieceId = null;
+  removeDxfFlag = false;
+  apDxf = null;
+  document.getElementById('ap-code').value = '';
+  document.getElementById('ap-thickness').value = '';
+  document.getElementById('ap-qty').value = '1';
+  setApType('plasma');
+  document.getElementById('apDxfLabel').textContent = '📎 Adjuntar DXF (opcional)';
+  document.getElementById('apDxfPicker').classList.remove('has-file');
+  document.getElementById('apRemoveDxfBtn').style.display = 'none';
+  document.getElementById('addPieceTitle').textContent = 'Agregar otra pieza a este dispositivo';
+  document.getElementById('apSubmitBtn').textContent = 'Agregar pieza';
+  document.getElementById('apCancelBtn').style.display = 'none';
+}
+
+function markRemoveDxf(){
+  removeDxfFlag = true;
+  apDxf = null;
+  document.getElementById('apDxfLabel').textContent = 'Se va a quitar el DXF actual al guardar';
+  document.getElementById('apDxfPicker').classList.remove('has-file');
+  document.getElementById('apRemoveDxfBtn').style.display = 'none';
+}
+
+async function submitAddPiece(){
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d) return;
+  const code = document.getElementById('ap-code').value.trim();
+  const thickness = document.getElementById('ap-thickness').value.trim();
+  const qty = document.getElementById('ap-qty').value.trim();
+  if(!code || !thickness || !qty){ showToast('Completá código, espesor y cantidad.', true); return; }
+
+  if(editingPieceId){
+    const p = d.pieces.find(x=>x.id===editingPieceId);
+    if(!p){ cancelEditPiece(); return; }
+    const oldHadDxf = p.hasDxf;
+    p.code = code; p.thickness = Number(thickness); p.qty = Number(qty); p.cutType = apType;
+
+    const newDxf = apDxf;
+    if(newDxf){ p.hasDxf = true; p.dxfName = newDxf.name; }
+    else if(removeDxfFlag){ p.hasDxf = false; p.dxfName = null; }
+
+    const pieceIdToSave = editingPieceId;
+    cancelEditPiece();
+    renderDetail();
+    render();
+    await queueSave();
+    if(newDxf) await setFile('dxf:'+pieceIdToSave, JSON.stringify(newDxf));
+    else if(removeDxfFlag && oldHadDxf) await deleteFile('dxf:'+pieceIdToSave);
+    showToast('Pieza actualizada.');
+    return;
+  }
+
+  const pieceId = uid('pz');
+  const dxf = apDxf;
+  d.pieces.push({ id:pieceId, code, thickness:Number(thickness), qty:Number(qty), cutType:apType, done:false, hasDxf:!!dxf, dxfName: dxf?dxf.name:null });
+  cancelEditPiece();
+  renderDetail();
+  render();
+  await queueSave();
+  if(dxf) await setFile('dxf:'+pieceId, JSON.stringify(dxf));
+}
+
+/* ---------- editar dispositivo ---------- */
+let edPendingImage = null;
+let edRemoveImage = false;
+
+function toggleEditDevice(){
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d) return;
+  edPendingImage = null;
+  edRemoveImage = false;
+  document.getElementById('ed-code').value = d.code;
+  document.getElementById('edImgPreview').style.display = 'none';
+  document.getElementById('edImgDropText').style.display = 'block';
+  document.getElementById('edRemoveImgBtn').style.display = d.hasImage ? 'inline-block' : 'none';
+  document.getElementById('editDeviceForm').style.display = 'block';
+  document.getElementById('detailImgWrap').style.display = 'none';
+  document.getElementById('editDeviceForm').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function cancelEditDevice(){
+  document.getElementById('editDeviceForm').style.display = 'none';
+  document.getElementById('detailImgWrap').style.display = 'block';
+}
+function handleEdImagePick(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  compressImage(file, dataUrl=>{
+    edPendingImage = dataUrl;
+    edRemoveImage = false;
+    const prev = document.getElementById('edImgPreview');
+    prev.src = dataUrl;
+    prev.style.display = 'block';
+    document.getElementById('edImgDropText').style.display = 'none';
+  });
+}
+function markRemoveDeviceImage(){
+  edRemoveImage = true;
+  edPendingImage = null;
+  document.getElementById('edImgPreview').style.display = 'none';
+  document.getElementById('edImgDropText').textContent = 'Se va a quitar la imagen actual al guardar';
+  document.getElementById('edRemoveImgBtn').style.display = 'none';
+}
+async function saveEditDevice(){
+  const d = devices.find(x=>x.id===openDeviceId);
+  if(!d) return;
+  const code = document.getElementById('ed-code').value.trim();
+  if(!code){ showToast('El dispositivo necesita un código o nombre.', true); return; }
+  d.code = code;
+
+  const newImg = edPendingImage;
+  const removeImg = edRemoveImage;
+  if(newImg){ d.hasImage = true; imageCache[d.id] = newImg; }
+  else if(removeImg){ d.hasImage = false; delete imageCache[d.id]; }
+
+  cancelEditDevice();
+  renderDetail();
+  render();
+  await queueSave();
+  if(newImg) await setFile('img:'+d.id, newImg);
+  else if(removeImg) await deleteFile('img:'+d.id);
+  showToast('Dispositivo actualizado.');
+}
+
+loadDevices();
+</script>
+</body>
+</html>
