@@ -183,6 +183,19 @@
 
   .loading{color:var(--text-muted);font-size:13px;text-align:center;padding:40px;}
 
+  .history-section{margin-top:26px;}
+  .history-list{margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+  .history-row{
+    display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);
+    border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);
+  }
+  .history-row .h-img{width:36px;height:36px;border-radius:5px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;}
+  .history-row .h-img-empty{width:36px;height:36px;border-radius:5px;border:1px dashed var(--border-soft);flex-shrink:0;}
+  .history-row .h-info{flex:1;min-width:0;}
+  .history-row .h-code{font-size:13px;font-weight:600;}
+  .history-row .h-meta{font-size:11px;color:var(--text-muted);margin-top:2px;}
+  .history-empty{color:var(--text-muted);font-size:12px;padding:10px 2px;}
+
   .confirm-modal{max-width:360px;text-align:center;}
   .confirm-modal p{font-size:14px;line-height:1.5;margin:0 0 20px;}
 </style>
@@ -211,6 +224,11 @@
 
   <div class="board" id="board">
     <div class="loading">Cargando dispositivos…</div>
+  </div>
+
+  <div class="history-section">
+    <button class="btn-secondary" id="historyToggleBtn" onclick="toggleHistory()">📜 Ver historial (0)</button>
+    <div class="history-list" id="historyList" style="display:none"></div>
   </div>
 
 </div>
@@ -330,6 +348,8 @@
 
     <div class="modal-actions" id="detailActions" style="margin-top:18px">
       <button class="btn-secondary" style="color:var(--danger)" onclick="deleteDeviceFromDetail()" id="deleteDeviceBtn">Eliminar dispositivo</button>
+      <button class="btn-secondary" id="finalizeBtn" style="display:none" onclick="finalizeDeviceCurrent()">✔ Finalizar y archivar</button>
+      <button class="btn-secondary" id="reopenBtn" style="display:none" onclick="reopenDeviceCurrent()">↩ Reabrir</button>
       <button class="btn-primary" onclick="closeDetailModal()">Listo</button>
     </div>
   </div>
@@ -542,6 +562,68 @@ function render(){
     board.appendChild(colEl);
   });
   renderStats();
+  renderHistory();
+}
+
+function toggleHistory(){
+  const list = document.getElementById('historyList');
+  const open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : 'block';
+}
+
+function renderHistory(){
+  const archived = devices.filter(d=>d.status==='terminado').sort((a,b)=> (b.finishedAt||0)-(a.finishedAt||0));
+  document.getElementById('historyToggleBtn').textContent = `📜 Ver historial (${archived.length})`;
+
+  const list = document.getElementById('historyList');
+  if(archived.length===0){
+    list.innerHTML = `<div class="history-empty">Todavía no hay dispositivos archivados.</div>`;
+    return;
+  }
+  list.innerHTML = '';
+  archived.forEach(d=>{
+    const s = pieceStats(d);
+    const imgSrc = imageCache[d.id];
+    const imgHtml = imgSrc ? `<img src="${imgSrc}" class="h-img">` : `<div class="h-img-empty"></div>`;
+    const dateStr = d.finishedAt ? new Date(d.finishedAt).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.innerHTML = `
+      ${imgHtml}
+      <div class="h-info">
+        <div class="h-code mono">${escapeHtml(d.code)}</div>
+        <div class="h-meta">${s.total} pieza(s) — finalizado ${dateStr}</div>
+      </div>
+      <button class="icon-btn" title="Ver detalle" onclick="openDetailModal('${d.id}')">👁</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function finalizeDeviceCurrent(){ finalizeDevice(openDeviceId); }
+async function finalizeDevice(id){
+  if(isCutterView) return;
+  const d = devices.find(x=>x.id===id);
+  if(!d) return;
+  d.status = 'terminado';
+  d.finishedAt = Date.now();
+  render();
+  if(openDeviceId===id) renderDetail();
+  await queueSave();
+  showToast('Dispositivo archivado en el historial.');
+}
+
+function reopenDeviceCurrent(){ reopenDevice(openDeviceId); }
+async function reopenDevice(id){
+  if(isCutterView) return;
+  const d = devices.find(x=>x.id===id);
+  if(!d) return;
+  d.status = 'cortados';
+  d.finishedAt = null;
+  render();
+  if(openDeviceId===id) renderDetail();
+  await queueSave();
+  showToast('Dispositivo reabierto — volvió a "Cortados".');
 }
 
 function renderCard(d, colId){
@@ -562,6 +644,7 @@ function renderCard(d, colId){
   const imgSrc = imageCache[d.id];
   const imgHtml = imgSrc ? `<img src="${imgSrc}" class="card-img">` : `<div class="card-img-empty">${d.hasImage?'cargando…':'sin foto'}</div>`;
   const delBtn = isCutterView ? '' : `<button class="icon-btn del" title="Eliminar dispositivo" onclick="event.stopPropagation(); deleteDevice('${d.id}')">🗑</button>`;
+  const finalizeBtn = (colId==='cortados' && !isCutterView) ? `<button class="icon-btn" title="Finalizar y archivar" onclick="event.stopPropagation(); finalizeDevice('${d.id}')">✔</button>` : '';
 
   card.innerHTML = `
     <div class="card-top">
@@ -584,6 +667,7 @@ function renderCard(d, colId){
       <div class="move-btns">
         <button class="icon-btn" title="Mover atrás" ${idx===0?'disabled':''} onclick="event.stopPropagation(); moveDeviceTo('${d.id}','${idx>0?COLUMNS[idx-1].id:''}')">←</button>
         <button class="icon-btn" title="Mover adelante" ${idx===COLUMNS.length-1?'disabled':''} onclick="event.stopPropagation(); moveDeviceTo('${d.id}','${idx<COLUMNS.length-1?COLUMNS[idx+1].id:''}')">→</button>
+        ${finalizeBtn}
       </div>
       ${delBtn}
     </div>
@@ -916,6 +1000,8 @@ function renderDetail(){
 
   document.getElementById('adminAddPiece').style.display = isCutterView ? 'none' : 'block';
   document.getElementById('deleteDeviceBtn').style.display = isCutterView ? 'none' : 'block';
+  document.getElementById('finalizeBtn').style.display = (!isCutterView && d.status==='cortados') ? 'inline-block' : 'none';
+  document.getElementById('reopenBtn').style.display = (!isCutterView && d.status==='terminado') ? 'inline-block' : 'none';
   document.getElementById('editDeviceBtn').style.display = isCutterView ? 'none' : 'inline-flex';
   cancelEditPiece();
 }
