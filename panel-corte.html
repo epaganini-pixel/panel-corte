@@ -247,8 +247,9 @@
         Avisar por mail a la persona que corta
       </label>
       <div id="mailFieldWrap" style="display:none;margin-top:8px">
-        <input type="text" id="d-mail-to" placeholder="mail@ejemplo.com">
-        <div class="hint">Se va a abrir tu programa de mail con todo redactado — vos confirmás el envío.</div>
+        <input type="text" id="d-mail-to" placeholder="Mail de la persona que corta">
+        <input type="text" id="d-notify-email" placeholder="Tu mail (para avisarte cuando esté cortado)" style="margin-top:8px">
+        <div class="hint">Se va a abrir Gmail con todo redactado — vos confirmás el envío. Cuando se tilden todas las piezas de este dispositivo, va a aparecer un botón para avisarte a este segundo mail.</div>
       </div>
     </div>
 
@@ -267,7 +268,8 @@
       <div style="flex:1;min-width:0">
         <h2 id="detailCode"></h2>
         <div class="modal-sub" id="detailSub"></div>
-    <button class="btn-secondary" id="downloadAllBtn" style="display:none;margin-bottom:14px" onclick="downloadAllDxf(openDeviceId)">⬇ Descargar todos los DXF</button>
+    <button class="btn-secondary" id="downloadAllBtn" style="display:none;margin-bottom:14px" onclick="downloadAllDxfCurrent()">⬇ Descargar todos los DXF</button>
+    <button class="btn-primary" id="notifyDoneBtn" style="display:none;margin-bottom:14px;background:var(--cortados);color:#173720" onclick="notifyDoneCurrent()">📧 Avisar que está cortado</button>
       </div>
       <button class="btn-ghost" id="editDeviceBtn" onclick="toggleEditDevice()" style="flex-shrink:0">✎ Editar</button>
     </div>
@@ -276,6 +278,10 @@
       <div class="field">
         <label>Código / nombre del dispositivo</label>
         <input type="text" id="ed-code">
+      </div>
+      <div class="field">
+        <label>Mail para avisar cuando esté cortado</label>
+        <input type="text" id="ed-notify-email" placeholder="tu@mail.com">
       </div>
       <div class="field">
         <label>Imagen</label>
@@ -386,7 +392,7 @@ let createDxfMap = {};     // rowId -> {name, data}
 let apType = 'plasma';
 let apDxf = null;
 let openDeviceId = null;
-let settings = { email: '' };
+let settings = { cutterEmail: '', notifyEmail: '' };
 
 const params = new URLSearchParams(window.location.search);
 const isCutterView = params.get('rol') === 'corte';
@@ -478,6 +484,7 @@ async function loadDevices(){
   try{
     const sres = await storageGet('settings');
     if(sres && sres.value) settings = JSON.parse(sres.value);
+    if(settings.email && !settings.cutterEmail) settings.cutterEmail = settings.email; // migración del campo viejo
   }catch(e){}
   if(isCutterView){
     document.getElementById('toolbar').style.display = 'none';
@@ -639,7 +646,8 @@ function openCreateModal(){
   addPieceRow();
   document.getElementById('d-sendmail').checked = false;
   document.getElementById('mailFieldWrap').style.display = 'none';
-  document.getElementById('d-mail-to').value = settings.email || '';
+  document.getElementById('d-mail-to').value = settings.cutterEmail || '';
+  document.getElementById('d-notify-email').value = settings.notifyEmail || '';
 }
 function closeCreateModal(){
   document.getElementById('createOverlay').classList.remove('open');
@@ -750,6 +758,7 @@ async function submitDevice(){
 
   const sendMail = document.getElementById('d-sendmail').checked;
   const mailTo = document.getElementById('d-mail-to').value.trim();
+  const notifyEmail = document.getElementById('d-notify-email').value.trim();
   if(sendMail && !mailTo){ showToast('Poné el mail de la persona que corta, o destildá el aviso.', true); return; }
 
   const rows = document.querySelectorAll('#pieceRows .piece-row');
@@ -769,7 +778,7 @@ async function submitDevice(){
   });
 
   const deviceId = uid('dev');
-  const newDevice = { id: deviceId, code, hasImage: !!pendingImage, status:'espera', createdAt: Date.now(), pieces };
+  const newDevice = { id: deviceId, code, hasImage: !!pendingImage, status:'espera', createdAt: Date.now(), pieces, notifyEmail: notifyEmail || null, notifyDoneSent:false };
   devices.push(newDevice);
   const imgToSave = pendingImage;
   if(imgToSave) imageCache[deviceId] = imgToSave;
@@ -778,11 +787,10 @@ async function submitDevice(){
   // abrir el cliente de mail dentro del mismo clic del usuario, sin esperas de por medio.
   if(sendMail && mailTo){
     openMailDraft(newDevice, mailTo);
-    if(mailTo !== settings.email){
-      settings.email = mailTo;
-      storageSet('settings', JSON.stringify(settings)).catch(()=>{});
-    }
   }
+  if(mailTo && mailTo !== settings.cutterEmail){ settings.cutterEmail = mailTo; }
+  if(notifyEmail && notifyEmail !== settings.notifyEmail){ settings.notifyEmail = notifyEmail; }
+  if(mailTo || notifyEmail){ storageSet('settings', JSON.stringify(settings)).catch(()=>{}); }
 
   closeCreateModal();
   render();
@@ -812,6 +820,31 @@ function openMailDraft(device, to){
   window.open(gmailUrl, '_blank');
 }
 
+function notifyDoneCurrent(){
+  notifyDone(openDeviceId);
+}
+function notifyDone(deviceId){
+  const d = devices.find(x=>x.id===deviceId);
+  if(!d) return;
+  const to = d.notifyEmail || settings.notifyEmail;
+  if(!to){ showToast('Cargá un mail para avisar — tocá "✎ Editar" arriba y completalo.', true); return; }
+  const s = pieceStats(d);
+  const subject = `Dispositivo cortado: ${d.code}`;
+  const lines = [`El dispositivo ${d.code} ya está completamente cortado (${s.done}/${s.total} piezas).`, '', 'Piezas:'];
+  d.pieces.forEach(p=>{
+    lines.push(`- ${p.code} — ${p.thickness} mm — x${p.qty} — ${p.cutType==='laser'?'Láser':'Plasma'}`);
+  });
+  const viewUrl = location.origin + location.pathname;
+  lines.push('', 'Podés verlo en el panel:', viewUrl);
+  const body = lines.join('\n');
+  // se dispara antes de cualquier await, por la misma razón que openMailDraft.
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.open(gmailUrl, '_blank');
+  d.notifyDoneSent = true;
+  renderDetail();
+  queueSave();
+}
+
 /* ---------- detalle / checklist ---------- */
 function openDetailModal(id){
   openDeviceId = id;
@@ -836,6 +869,18 @@ function renderDetail(){
   const dlBtn = document.getElementById('downloadAllBtn');
   dlBtn.style.display = dxfCount > 0 ? 'block' : 'none';
   dlBtn.textContent = `⬇ Descargar todos los DXF (${dxfCount})`;
+
+  const isFullyDone = s.total > 0 && s.done === s.total;
+  const notifyBtn = document.getElementById('notifyDoneBtn');
+  if(isFullyDone && (d.notifyEmail || settings.notifyEmail)){
+    notifyBtn.style.display = 'block';
+    notifyBtn.textContent = d.notifyDoneSent ? '📧 Aviso ya enviado (volver a enviar)' : '📧 Avisar que está cortado';
+  }else if(isFullyDone){
+    notifyBtn.style.display = 'block';
+    notifyBtn.textContent = '📧 Avisar que está cortado (falta cargar un mail — editá el dispositivo)';
+  }else{
+    notifyBtn.style.display = 'none';
+  }
 
   const imgSrc = imageCache[d.id];
   document.getElementById('detailImgWrap').innerHTML = imgSrc
@@ -875,6 +920,9 @@ function renderDetail(){
   cancelEditPiece();
 }
 
+function downloadAllDxfCurrent(){
+  downloadAllDxf(openDeviceId);
+}
 async function downloadAllDxf(deviceId){
   const d = devices.find(x=>x.id===deviceId);
   if(!d) return;
@@ -1083,6 +1131,7 @@ function toggleEditDevice(){
   edPendingImage = null;
   edRemoveImage = false;
   document.getElementById('ed-code').value = d.code;
+  document.getElementById('ed-notify-email').value = d.notifyEmail || settings.notifyEmail || '';
   document.getElementById('edImgPreview').style.display = 'none';
   document.getElementById('edImgDropText').style.display = 'block';
   document.getElementById('edRemoveImgBtn').style.display = d.hasImage ? 'inline-block' : 'none';
@@ -1119,6 +1168,11 @@ async function saveEditDevice(){
   const code = document.getElementById('ed-code').value.trim();
   if(!code){ showToast('El dispositivo necesita un código o nombre.', true); return; }
   d.code = code;
+  d.notifyEmail = document.getElementById('ed-notify-email').value.trim() || null;
+  if(d.notifyEmail && d.notifyEmail !== settings.notifyEmail){
+    settings.notifyEmail = d.notifyEmail;
+    storageSet('settings', JSON.stringify(settings)).catch(()=>{});
+  }
 
   const newImg = edPendingImage;
   const removeImg = edRemoveImage;
@@ -1140,9 +1194,9 @@ async function saveEditDevice(){
    exponerlas a mano para que los botones funcionen. */
 Object.assign(window, {
   addPieceRow, cancelEditDevice, cancelEditPiece, closeCreateModal, closeDetailModal,
-  deleteDevice, deleteDeviceFromDetail, downloadDxf, downloadAllDxf, handleApDxfPick, handleEdImagePick,
+  deleteDevice, deleteDeviceFromDetail, downloadDxf, downloadAllDxf, downloadAllDxfCurrent, handleApDxfPick, handleEdImagePick,
   handleImagePick, handleRowDxfPick, markRemoveDeviceImage, markRemoveDxf, moveDeviceTo,
-  openCreateModal, openDetailModal, removePiece, saveEditDevice, setApType, setRowType,
+  notifyDoneCurrent, openCreateModal, openDetailModal, removePiece, saveEditDevice, setApType, setRowType,
   startEditPiece, submitAddPiece, submitDevice, toggleEditDevice
 });
 
