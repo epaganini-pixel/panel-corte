@@ -774,20 +774,22 @@ async function submitDevice(){
   const imgToSave = pendingImage;
   if(imgToSave) imageCache[deviceId] = imgToSave;
 
+  // el mail se dispara ANTES de cualquier "await": los navegadores solo dejan
+  // abrir el cliente de mail dentro del mismo clic del usuario, sin esperas de por medio.
+  if(sendMail && mailTo){
+    openMailDraft(newDevice, mailTo);
+    if(mailTo !== settings.email){
+      settings.email = mailTo;
+      storageSet('settings', JSON.stringify(settings)).catch(()=>{});
+    }
+  }
+
   closeCreateModal();
   render();
   await queueSave();
   if(imgToSave) await setFile('img:'+deviceId, imgToSave);
   for(const dx of dxfToSave){ await setFile('dxf:'+dx.id, JSON.stringify(dx.data)); }
   showToast('Dispositivo creado.');
-
-  if(sendMail && mailTo){
-    if(mailTo !== settings.email){
-      settings.email = mailTo;
-      storageSet('settings', JSON.stringify(settings)).catch(()=>{});
-    }
-    openMailDraft(newDevice, mailTo);
-  }
 }
 
 function openMailDraft(device, to){
