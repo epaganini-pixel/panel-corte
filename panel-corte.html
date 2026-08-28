@@ -806,12 +806,10 @@ function openMailDraft(device, to){
   const viewUrl = location.origin + location.pathname + '?rol=corte';
   lines.push('', 'Podés ver el detalle y descargar los DXF acá:', viewUrl);
   const body = lines.join('\n');
-  const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  const a = document.createElement('a');
-  a.href = mailtoUrl;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  // Gmail web compose directo — no depende de que la compu tenga un programa
+  // de mail configurado, que era lo que hacía fallar el mailto: de antes.
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.open(gmailUrl, '_blank');
 }
 
 /* ---------- detalle / checklist ---------- */
