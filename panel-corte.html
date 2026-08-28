@@ -1032,6 +1032,18 @@ async function saveEditDevice(){
   showToast('Dispositivo actualizado.');
 }
 
+/* estas funciones se llaman desde atributos onclick/onchange del HTML.
+   Con <script type="module"> (necesario para Firebase) las funciones ya
+   no quedan visibles solas en window como en un script normal — hay que
+   exponerlas a mano para que los botones funcionen. */
+Object.assign(window, {
+  addPieceRow, cancelEditDevice, cancelEditPiece, closeCreateModal, closeDetailModal,
+  deleteDevice, deleteDeviceFromDetail, downloadDxf, handleApDxfPick, handleEdImagePick,
+  handleImagePick, handleRowDxfPick, markRemoveDeviceImage, markRemoveDxf, moveDeviceTo,
+  openCreateModal, openDetailModal, removePiece, saveEditDevice, setApType, setRowType,
+  startEditPiece, submitAddPiece, submitDevice, toggleEditDevice
+});
+
 loadDevices();
 </script>
 </body>
