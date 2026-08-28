@@ -17,6 +17,8 @@
     --text-muted:#948e80;
     --plasma:#d97a45;
     --laser:#3f7f7c;
+    --brand:#ffaf0f;
+    --brand-dark:#c98700;
     --espera:#cf9b3d;
     --anadidos:#5678a3;
     --cortados:#6ea675;
@@ -46,8 +48,11 @@
   header{
     display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;
     padding-bottom:20px;margin-bottom:22px;
-    border-bottom:1px solid var(--border);
+    border-bottom:2px solid var(--brand);
   }
+  .header-brand{display:flex;align-items:center;gap:12px;}
+  .logo-badge{width:42px;height:42px;border-radius:10px;overflow:hidden;flex-shrink:0;box-shadow:var(--shadow);}
+  .logo-badge img{width:100%;height:100%;display:block;object-fit:cover;}
   .title-block h1{font-size:24px;margin:0;color:var(--text);font-weight:700;letter-spacing:-0.01em;}
   .title-block .sub{color:var(--text-muted);font-size:13px;margin-top:5px;}
 
@@ -63,8 +68,8 @@
 
   .toolbar{display:flex;gap:10px;margin-bottom:22px;flex-wrap:wrap;}
   button{font-family:'Inter';cursor:pointer;border:none;border-radius:7px;font-weight:600;font-size:13px;}
-  .btn-primary{background:var(--text);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:8px;}
-  .btn-primary:hover{background:#454138;}
+  .btn-primary{background:var(--brand);color:#241a00;padding:10px 18px;display:flex;align-items:center;gap:8px;}
+  .btn-primary:hover{background:var(--brand-dark);}
   .btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border);padding:10px 16px;}
   .btn-secondary:hover{border-color:var(--text-muted);}
   .btn-ghost{background:transparent;color:var(--text-muted);padding:6px 10px;font-size:11.5px;text-decoration:underline;}
@@ -190,9 +195,12 @@
   </div>
 
   <header>
-    <div class="title-block">
-      <h1>Panel de Corte</h1>
-      <div class="sub">Mapa visual de dispositivos — corte por Plasma y Láser</div>
+    <div class="header-brand">
+      <div class="logo-badge"><img src="data:image/png;base64,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" alt="Logo"></div>
+      <div class="title-block">
+        <h1>Panel de Corte</h1>
+        <div class="sub">Mapa visual de dispositivos — corte por Plasma y Láser</div>
+      </div>
     </div>
     <div class="stats" id="stats"></div>
   </header>
@@ -233,6 +241,17 @@
       <button type="button" class="add-row-btn" onclick="addPieceRow()">＋ Agregar otra pieza</button>
     </div>
 
+    <div class="field" style="border-top:1px dashed var(--border);padding-top:14px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;font-size:13px;color:var(--text);letter-spacing:0">
+        <input type="checkbox" id="d-sendmail" style="width:16px;height:16px" onchange="document.getElementById('mailFieldWrap').style.display=this.checked?'block':'none'">
+        Avisar por mail a la persona que corta
+      </label>
+      <div id="mailFieldWrap" style="display:none;margin-top:8px">
+        <input type="text" id="d-mail-to" placeholder="mail@ejemplo.com">
+        <div class="hint">Se va a abrir tu programa de mail con todo redactado — vos confirmás el envío.</div>
+      </div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
       <button class="btn-primary" onclick="submitDevice()">Crear dispositivo</button>
@@ -248,6 +267,7 @@
       <div style="flex:1;min-width:0">
         <h2 id="detailCode"></h2>
         <div class="modal-sub" id="detailSub"></div>
+    <button class="btn-secondary" id="downloadAllBtn" style="display:none;margin-bottom:14px" onclick="downloadAllDxf(openDeviceId)">⬇ Descargar todos los DXF</button>
       </div>
       <button class="btn-ghost" id="editDeviceBtn" onclick="toggleEditDevice()" style="flex-shrink:0">✎ Editar</button>
     </div>
@@ -322,6 +342,7 @@
 
 <div class="toast" id="toast"><span id="toastMsg"></span></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -365,6 +386,7 @@ let createDxfMap = {};     // rowId -> {name, data}
 let apType = 'plasma';
 let apDxf = null;
 let openDeviceId = null;
+let settings = { email: '' };
 
 const params = new URLSearchParams(window.location.search);
 const isCutterView = params.get('rol') === 'corte';
@@ -453,6 +475,10 @@ async function loadDevices(){
   }catch(e){
     devices = [];
   }
+  try{
+    const sres = await storageGet('settings');
+    if(sres && sres.value) settings = JSON.parse(sres.value);
+  }catch(e){}
   if(isCutterView){
     document.getElementById('toolbar').style.display = 'none';
     document.getElementById('roleBanner').style.display = 'flex';
@@ -611,6 +637,9 @@ function openCreateModal(){
   rowCounter = 0;
   createDxfMap = {};
   addPieceRow();
+  document.getElementById('d-sendmail').checked = false;
+  document.getElementById('mailFieldWrap').style.display = 'none';
+  document.getElementById('d-mail-to').value = settings.email || '';
 }
 function closeCreateModal(){
   document.getElementById('createOverlay').classList.remove('open');
@@ -719,6 +748,10 @@ async function submitDevice(){
   const code = document.getElementById('d-code').value.trim();
   if(!code){ showToast('Ponele un código o nombre al dispositivo.', true); return; }
 
+  const sendMail = document.getElementById('d-sendmail').checked;
+  const mailTo = document.getElementById('d-mail-to').value.trim();
+  if(sendMail && !mailTo){ showToast('Poné el mail de la persona que corta, o destildá el aviso.', true); return; }
+
   const rows = document.querySelectorAll('#pieceRows .piece-row');
   const pieces = [];
   const dxfToSave = [];
@@ -736,10 +769,8 @@ async function submitDevice(){
   });
 
   const deviceId = uid('dev');
-  devices.push({
-    id: deviceId, code, hasImage: !!pendingImage,
-    status:'espera', createdAt: Date.now(), pieces
-  });
+  const newDevice = { id: deviceId, code, hasImage: !!pendingImage, status:'espera', createdAt: Date.now(), pieces };
+  devices.push(newDevice);
   const imgToSave = pendingImage;
   if(imgToSave) imageCache[deviceId] = imgToSave;
 
@@ -749,6 +780,36 @@ async function submitDevice(){
   if(imgToSave) await setFile('img:'+deviceId, imgToSave);
   for(const dx of dxfToSave){ await setFile('dxf:'+dx.id, JSON.stringify(dx.data)); }
   showToast('Dispositivo creado.');
+
+  if(sendMail && mailTo){
+    if(mailTo !== settings.email){
+      settings.email = mailTo;
+      storageSet('settings', JSON.stringify(settings)).catch(()=>{});
+    }
+    openMailDraft(newDevice, mailTo);
+  }
+}
+
+function openMailDraft(device, to){
+  const subject = `Nuevo dispositivo para cortar: ${device.code}`;
+  const lines = [`Se cargó un nuevo dispositivo para cortar: ${device.code}`, ''];
+  if(device.pieces.length){
+    lines.push('Piezas:');
+    device.pieces.forEach(p=>{
+      lines.push(`- ${p.code} — ${p.thickness} mm — x${p.qty} — ${p.cutType==='laser'?'Láser':'Plasma'}${p.hasDxf?' (con DXF)':''}`);
+    });
+  }else{
+    lines.push('Todavía no tiene piezas cargadas.');
+  }
+  const viewUrl = location.origin + location.pathname + '?rol=corte';
+  lines.push('', 'Podés ver el detalle y descargar los DXF acá:', viewUrl);
+  const body = lines.join('\n');
+  const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const a = document.createElement('a');
+  a.href = mailtoUrl;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 /* ---------- detalle / checklist ---------- */
@@ -770,6 +831,11 @@ function renderDetail(){
 
   document.getElementById('detailCode').textContent = d.code;
   document.getElementById('detailSub').textContent = s.total ? `${s.done}/${s.total} piezas cortadas` : 'Todavía no tiene piezas cargadas';
+
+  const dxfCount = d.pieces.filter(p=>p.hasDxf).length;
+  const dlBtn = document.getElementById('downloadAllBtn');
+  dlBtn.style.display = dxfCount > 0 ? 'block' : 'none';
+  dlBtn.textContent = `⬇ Descargar todos los DXF (${dxfCount})`;
 
   const imgSrc = imageCache[d.id];
   document.getElementById('detailImgWrap').innerHTML = imgSrc
@@ -807,6 +873,42 @@ function renderDetail(){
   document.getElementById('deleteDeviceBtn').style.display = isCutterView ? 'none' : 'block';
   document.getElementById('editDeviceBtn').style.display = isCutterView ? 'none' : 'inline-flex';
   cancelEditPiece();
+}
+
+async function downloadAllDxf(deviceId){
+  const d = devices.find(x=>x.id===deviceId);
+  if(!d) return;
+  const withDxf = d.pieces.filter(p=>p.hasDxf);
+  if(!withDxf.length){ showToast('Este dispositivo no tiene DXF cargados.', true); return; }
+
+  showToast(`Armando ZIP con ${withDxf.length} archivo(s)…`);
+  try{
+    const zip = new JSZip();
+    const usedNames = {};
+    await Promise.all(withDxf.map(async p=>{
+      const res = await storageGet('dxf:'+p.id);
+      if(!res || !res.value) return;
+      const stored = JSON.parse(res.value);
+      if(!stored || !stored.data) return;
+      const base64 = stored.data.split(',')[1];
+      let name = stored.name || (p.code + '.dxf');
+      if(usedNames[name]){ usedNames[name]++; name = name.replace(/\.dxf$/i, '') + '_' + usedNames[name] + '.dxf'; }
+      else{ usedNames[name] = 1; }
+      zip.file(name, base64, {base64:true});
+    }));
+    const blob = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (d.code || 'dispositivo').replace(/[^a-zA-Z0-9_\-]/g,'_') + '_dxf.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=> URL.revokeObjectURL(url), 4000);
+    showToast('ZIP descargado.');
+  }catch(e){
+    showToast('No se pudo armar el ZIP.', true, ()=> downloadAllDxf(deviceId));
+  }
 }
 
 async function downloadDxf(pieceId, filename){
@@ -1038,7 +1140,7 @@ async function saveEditDevice(){
    exponerlas a mano para que los botones funcionen. */
 Object.assign(window, {
   addPieceRow, cancelEditDevice, cancelEditPiece, closeCreateModal, closeDetailModal,
-  deleteDevice, deleteDeviceFromDetail, downloadDxf, handleApDxfPick, handleEdImagePick,
+  deleteDevice, deleteDeviceFromDetail, downloadDxf, downloadAllDxf, handleApDxfPick, handleEdImagePick,
   handleImagePick, handleRowDxfPick, markRemoveDeviceImage, markRemoveDxf, moveDeviceTo,
   openCreateModal, openDetailModal, removePiece, saveEditDevice, setApType, setRowType,
   startEditPiece, submitAddPiece, submitDevice, toggleEditDevice
