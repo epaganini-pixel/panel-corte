@@ -61,7 +61,13 @@
   .piece-list{display:flex;flex-direction:column;gap:8px;}
   .empty-msg{color:var(--text-muted);font-size:12.5px;text-align:center;padding:24px 8px;border:1px dashed var(--border);border-radius:8px;}
 
-  .piece-card{background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;}
+  .piece-card{background:var(--panel);border:1px solid var(--border-soft);border-left:4px solid transparent;border-radius:10px;box-shadow:var(--shadow);overflow:hidden;}
+  .color-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;vertical-align:middle;margin-bottom:2px;}
+  .color-picker{display:flex;gap:9px;flex-wrap:wrap;align-items:center;}
+  .color-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .color-swatch.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--panel);}
+  .color-swatch.none{background:var(--panel-alt);border:1px dashed var(--border);color:var(--text-muted);font-size:14px;}
+  .color-swatch.none.selected{border-color:var(--text);border-style:solid;}
   .piece-card.running{border-color:var(--run);}
   .piece-card.paused{border-color:var(--pause);}
   .piece-row{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;}
@@ -206,6 +212,10 @@
       </div>
       <div class="hint" style="font-size:11px;color:var(--text-muted);margin-top:6px">Hasta ~650 KB por archivo.</div>
     </div>
+    <div class="field">
+      <label>Color (para ordenar visualmente por tipología)</label>
+      <div class="color-picker" id="colorPicker"></div>
+    </div>
 
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
@@ -277,9 +287,35 @@ let pieces = [];
 let iconCache = {};
 let pendingIcon = null;
 let pendingPdf = null;
+let pendingColor = null;
 let editingPieceId = null;
 let dragPieceId = null;
 let openRowId = null;
+
+const COLOR_PALETTE = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#16a085','#3498db','#9b59b6','#7f8c8d'];
+
+function renderColorPicker(selected){
+  const wrap = document.getElementById('colorPicker');
+  wrap.innerHTML = '';
+  const noneBtn = document.createElement('div');
+  noneBtn.className = 'color-swatch none' + (!selected ? ' selected' : '');
+  noneBtn.title = 'Sin color';
+  noneBtn.textContent = '✕';
+  noneBtn.onclick = ()=> pickColor(null);
+  wrap.appendChild(noneBtn);
+  COLOR_PALETTE.forEach(c=>{
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (selected===c ? ' selected' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.onclick = ()=> pickColor(c);
+    wrap.appendChild(sw);
+  });
+}
+function pickColor(c){
+  pendingColor = c;
+  renderColorPicker(c);
+}
 
 const params = new URLSearchParams(window.location.search);
 const isOperarioView = params.get('rol') === 'operario';
@@ -432,6 +468,7 @@ function renderPieceCard(p){
   const statusClass = p.status==='en_progreso' ? 'running' : (p.status==='pausado' ? 'paused' : '');
   card.className = 'piece-card ' + statusClass + (openRowId===p.id ? ' expanded' : '');
   card.draggable = !isOperarioView && !isFinished;
+  if(p.color) card.style.borderLeftColor = p.color;
   if(!isFinished){
     card.addEventListener('dragstart', ()=> dragPieceId = p.id);
     card.addEventListener('dragover', e=>{
@@ -464,7 +501,7 @@ function renderPieceCard(p){
     ${dragHandle}
     ${iconHtml}
     <div class="piece-info">
-      <div class="piece-name">${escapeHtml(p.name)}</div>
+      <div class="piece-name">${p.color ? `<span class="color-dot" style="background:${p.color}"></span> ` : ''}${escapeHtml(p.name)}</div>
       <div class="piece-meta">
         <span>×${p.qty}</span>
         <span class="status-chip ${isFinished?'pausado':p.status}" ${p.status!=='pendiente' ? 'id="chip_'+p.id+'"' : ''}><span class="dot"></span>${statusLabel}</span>
@@ -696,6 +733,8 @@ function openCreateModal(){
   document.getElementById('p-qty').value = '1';
   pendingIcon = null;
   pendingPdf = null;
+  pendingColor = null;
+  renderColorPicker(null);
   document.getElementById('iconPreview').style.display = 'none';
   document.getElementById('iconDropText').style.display = 'block';
   document.getElementById('iconDrop').classList.remove('has-file');
@@ -717,6 +756,8 @@ function startEditPiece(id){
   document.getElementById('p-qty').value = p.qty;
   pendingIcon = null;
   pendingPdf = null;
+  pendingColor = p.color || null;
+  renderColorPicker(pendingColor);
   document.getElementById('iconPreview').style.display = 'none';
   document.getElementById('iconDropText').style.display = 'block';
   document.getElementById('iconDropText').textContent = p.hasIcon ? 'Tocar para reemplazar imagen' : 'Tocar para elegir imagen';
@@ -775,7 +816,7 @@ async function submitPiece(){
   if(editingPieceId){
     const p = pieces.find(x=>x.id===editingPieceId);
     if(!p) return;
-    p.name = name; p.qty = Number(qty);
+    p.name = name; p.qty = Number(qty); p.color = pendingColor;
     const newIcon = pendingIcon, newPdf = pendingPdf;
     if(newIcon){ p.hasIcon = true; iconCache[p.id] = newIcon; }
     if(newPdf){ p.hasPdf = true; p.pdfName = newPdf.name; }
@@ -794,7 +835,7 @@ async function submitPiece(){
   const id = uid('pz');
   const icon = pendingIcon, pdf = pendingPdf;
   pieces.push({
-    id, name, qty:Number(qty), order:maxOrder+1,
+    id, name, qty:Number(qty), order:maxOrder+1, color: pendingColor,
     hasIcon: !!icon, hasPdf: !!pdf, pdfName: pdf?pdf.name:null,
     status:'pendiente', startedAt:null, accumulatedMs:0, finishedAt:null, totalMs:null,
     createdAt: Date.now()
