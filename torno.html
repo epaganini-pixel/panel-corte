@@ -95,6 +95,20 @@
   .btn-pdf:hover{border-color:var(--text-muted);}
   .expand-footer{display:flex;justify-content:space-between;gap:8px;margin-top:6px;}
 
+  .comments-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-soft);}
+  .comments-section h4{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 10px;font-weight:600;}
+  .comment-row{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:var(--panel-alt);border-radius:7px;margin-bottom:6px;}
+  .comment-row .c-body{flex:1;min-width:0;}
+  .comment-row .c-text{font-size:12.5px;color:var(--text);line-height:1.4;word-break:break-word;}
+  .comment-row .c-meta{font-size:10px;color:var(--text-muted);margin-top:3px;}
+  .comment-row .c-del{background:none;color:var(--text-muted);font-size:11px;width:18px;height:18px;flex-shrink:0;}
+  .comment-row .c-del:hover{color:var(--danger);}
+  .comment-empty{font-size:11.5px;color:var(--text-muted);margin-bottom:8px;}
+  .comment-input-row{display:flex;gap:8px;margin-top:4px;}
+  .comment-input-row input{flex:1;background:var(--panel-alt);border:1px solid var(--border-soft);border-radius:7px;padding:8px 10px;font-size:12.5px;font-family:'Inter';color:var(--text);}
+  .comment-input-row button{padding:8px 14px;background:var(--brand);color:#241a00;flex-shrink:0;}
+  .comment-input-row button:hover{background:var(--brand-dark);}
+
   .finished-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);}
   .finished-row .f-icon{width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;background:var(--panel-alt);}
   .finished-row .f-icon-empty{width:34px;height:34px;border-radius:6px;border:1px dashed var(--border-soft);flex-shrink:0;}
@@ -413,32 +427,36 @@ function renderActiveList(){
 }
 
 function renderPieceCard(p){
+  const isFinished = p.status==='terminada';
   const card = document.createElement('div');
   const statusClass = p.status==='en_progreso' ? 'running' : (p.status==='pausado' ? 'paused' : '');
   card.className = 'piece-card ' + statusClass + (openRowId===p.id ? ' expanded' : '');
-  card.draggable = !isOperarioView;
-  card.addEventListener('dragstart', ()=> dragPieceId = p.id);
-  card.addEventListener('dragover', e=>{
-    e.preventDefault();
-    if(!dragPieceId || dragPieceId===p.id) return;
-    const activeList = getActiveSorted();
-    const fromIdx = activeList.findIndex(x=>x.id===dragPieceId);
-    const toIdx = activeList.findIndex(x=>x.id===p.id);
-    if(fromIdx===-1 || toIdx===-1 || fromIdx===toIdx) return;
-    const [moved] = activeList.splice(fromIdx,1);
-    activeList.splice(toIdx,0,moved);
-    activeList.forEach((item,idx)=> item.order = idx);
-    renderActiveList();
-  });
-  card.addEventListener('dragend', ()=>{ dragPieceId=null; queueSave(); });
+  card.draggable = !isOperarioView && !isFinished;
+  if(!isFinished){
+    card.addEventListener('dragstart', ()=> dragPieceId = p.id);
+    card.addEventListener('dragover', e=>{
+      e.preventDefault();
+      if(!dragPieceId || dragPieceId===p.id) return;
+      const activeList = getActiveSorted();
+      const fromIdx = activeList.findIndex(x=>x.id===dragPieceId);
+      const toIdx = activeList.findIndex(x=>x.id===p.id);
+      if(fromIdx===-1 || toIdx===-1 || fromIdx===toIdx) return;
+      const [moved] = activeList.splice(fromIdx,1);
+      activeList.splice(toIdx,0,moved);
+      activeList.forEach((item,idx)=> item.order = idx);
+      renderActiveList();
+    });
+    card.addEventListener('dragend', ()=>{ dragPieceId=null; queueSave(); });
+  }
 
   const iconSrc = iconCache[p.id];
   const iconHtml = iconSrc ? `<img src="${iconSrc}" class="piece-icon">` : `<div class="piece-icon-empty"></div>`;
-  const dragHandle = isOperarioView ? '' : `<span class="drag-handle">⠿</span>`;
+  const dragHandle = (isOperarioView || isFinished) ? '' : `<span class="drag-handle">⠿</span>`;
 
   let statusLabel = 'Pendiente';
   if(p.status==='en_progreso') statusLabel = 'En curso ' + formatDuration(getElapsedMs(p));
   if(p.status==='pausado') statusLabel = 'Pausado ' + formatDuration(getElapsedMs(p));
+  if(isFinished) statusLabel = 'Terminada ' + formatDurationLong(p.totalMs||0);
 
   const row = document.createElement('div');
   row.className = 'piece-row';
@@ -449,7 +467,9 @@ function renderPieceCard(p){
       <div class="piece-name">${escapeHtml(p.name)}</div>
       <div class="piece-meta">
         <span>×${p.qty}</span>
-        <span class="status-chip ${p.status}" ${p.status!=='pendiente' ? 'id="chip_'+p.id+'"' : ''}><span class="dot"></span>${statusLabel}</span>
+        <span class="status-chip ${isFinished?'pausado':p.status}" ${p.status!=='pendiente' ? 'id="chip_'+p.id+'"' : ''}><span class="dot"></span>${statusLabel}</span>
+        ${isFinished ? `<span>${formatDate(p.finishedAt)}</span>` : ''}
+        ${(p.comments && p.comments.length) ? `<span>💬 ${p.comments.length}</span>` : ''}
       </div>
     </div>
     <span class="chevron">▸</span>
@@ -464,19 +484,29 @@ function renderPieceCard(p){
   expand.className = 'piece-expand';
   const pdfBtn = p.hasPdf ? `<button class="btn-pdf" onclick="event.stopPropagation(); viewPdf('${p.id}')">📄 Visualizar PDF</button>` : `<div class="hint" style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Esta pieza no tiene plano cargado.</div>`;
 
+  let timerBlock = '';
   let actionButtons = '';
-  if(p.status==='pendiente'){
-    actionButtons = `<div class="action-row"><button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Empezar</button></div>`;
-  }else if(p.status==='en_progreso'){
-    actionButtons = `<div class="action-row">
-      <button class="btn-pause" onclick="event.stopPropagation(); pausePiece('${p.id}')">⏸ Pausar</button>
-      <button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
-    </div>`;
-  }else if(p.status==='pausado'){
-    actionButtons = `<div class="action-row">
-      <button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Reanudar</button>
-      <button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
-    </div>`;
+  if(isFinished){
+    const reopenBtn = isOperarioView ? '' : `<div class="action-row"><button class="btn-secondary" style="width:100%" onclick="event.stopPropagation(); reopenPiece('${p.id}')">↩ Reabrir</button></div>`;
+    actionButtons = reopenBtn;
+  }else{
+    timerBlock = `
+      <div class="timer-display" id="timer_${p.id}">${formatDuration(getElapsedMs(p))}</div>
+      <div class="timer-label">Tiempo trabajado</div>
+    `;
+    if(p.status==='pendiente'){
+      actionButtons = `<div class="action-row"><button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Empezar</button></div>`;
+    }else if(p.status==='en_progreso'){
+      actionButtons = `<div class="action-row">
+        <button class="btn-pause" onclick="event.stopPropagation(); pausePiece('${p.id}')">⏸ Pausar</button>
+        <button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
+      </div>`;
+    }else if(p.status==='pausado'){
+      actionButtons = `<div class="action-row">
+        <button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Reanudar</button>
+        <button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
+      </div>`;
+    }
   }
 
   const footerBtns = isOperarioView ? '' : `
@@ -486,14 +516,58 @@ function renderPieceCard(p){
     </div>`;
 
   expand.innerHTML = `
-    <div class="timer-display" id="timer_${p.id}">${formatDuration(getElapsedMs(p))}</div>
-    <div class="timer-label">Tiempo trabajado</div>
+    ${timerBlock}
     ${pdfBtn}
     ${actionButtons}
     ${footerBtns}
+    ${renderCommentsHtml(p)}
   `;
   card.appendChild(expand);
   return card;
+}
+
+function renderCommentsHtml(p){
+  const comments = p.comments || [];
+  const listHtml = comments.length ? comments.map(c=>`
+    <div class="comment-row">
+      <div class="c-body">
+        <div class="c-text">${escapeHtml(c.text)}</div>
+        <div class="c-meta">${c.role==='operario'?'Operario':'Administración'} — ${formatDate(c.ts)}</div>
+      </div>
+      ${isOperarioView ? '' : `<button class="c-del" onclick="event.stopPropagation(); removeComment('${p.id}','${c.id}')">✕</button>`}
+    </div>
+  `).join('') : `<div class="comment-empty">Sin comentarios todavía.</div>`;
+  return `
+    <div class="comments-section" onclick="event.stopPropagation()">
+      <h4>Comentarios</h4>
+      ${listHtml}
+      <div class="comment-input-row">
+        <input type="text" id="comment_input_${p.id}" placeholder="Escribir un comentario…" onkeydown="if(event.key==='Enter'){ addComment('${p.id}'); }">
+        <button onclick="addComment('${p.id}')">Enviar</button>
+      </div>
+    </div>
+  `;
+}
+
+async function addComment(pieceId){
+  const input = document.getElementById('comment_input_'+pieceId);
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+  const p = pieces.find(x=>x.id===pieceId);
+  if(!p) return;
+  if(!p.comments) p.comments = [];
+  p.comments.push({ id: uid('cm'), text, role: isOperarioView ? 'operario' : 'administración', ts: Date.now() });
+  render();
+  await queueSave();
+}
+async function removeComment(pieceId, commentId){
+  if(isOperarioView) return;
+  const p = pieces.find(x=>x.id===pieceId);
+  if(!p || !p.comments) return;
+  p.comments = p.comments.filter(c=>c.id!==commentId);
+  render();
+  await queueSave();
 }
 
 function renderFinishedList(){
@@ -504,23 +578,7 @@ function renderFinishedList(){
     list.innerHTML = `<div class="empty-msg">Todavía no hay piezas terminadas</div>`;
     return;
   }
-  items.forEach(p=>{
-    const iconSrc = iconCache[p.id];
-    const iconHtml = iconSrc ? `<img src="${iconSrc}" class="f-icon">` : `<div class="f-icon-empty"></div>`;
-    const reopenBtn = isOperarioView ? '' : `<button class="icon-btn-like btn-ghost" onclick="reopenPiece('${p.id}')" title="Reabrir">↩</button>`;
-    const row = document.createElement('div');
-    row.className = 'finished-row';
-    row.innerHTML = `
-      ${iconHtml}
-      <div class="f-info">
-        <div class="f-name">${escapeHtml(p.name)}</div>
-        <div class="f-meta">×${p.qty}</div>
-      </div>
-      <div class="f-time">${formatDurationLong(p.totalMs||0)}<span class="f-date">${formatDate(p.finishedAt)}</span></div>
-      ${reopenBtn}
-    `;
-    list.appendChild(row);
-  });
+  items.forEach(p=> list.appendChild(renderPieceCard(p)));
 }
 
 function escapeHtml(s){
@@ -752,7 +810,8 @@ async function submitPiece(){
 
 Object.assign(window, {
   openCreateModal, closeCreateModal, startEditPiece, handleIconPick, handlePdfPick, submitPiece,
-  startPiece, pausePiece, finishPiece, reopenPiece, viewPdf, deletePieceConfirm, toggleExpand
+  startPiece, pausePiece, finishPiece, reopenPiece, viewPdf, deletePieceConfirm, toggleExpand,
+  addComment, removeComment
 });
 
 loadPieces();
