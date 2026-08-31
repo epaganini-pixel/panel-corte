@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seguimiento de Producción — SOLDADURA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f1f3f5; --panel:#ffffff; --border:#d6dbe0; --text:#1f2933; --muted:#5b6b79;
+  --accent:#1b4965; --accent-light:#e7eef2;
+  --ok:#1e8e3e; --ok-bg:#e3f5e8;
+  --warn:#e8a300; --warn-bg:#fdf3d9;
+  --bad:#d23c2c; --bad-bg:#fbe4e1;
+  --partial:#e08a00; --partial-bg:#fdeed9;
+  --proceso:#c9a300; --proceso-bg:#fbf6d9;
+  --neutral:#8a97a3; --neutral-bg:#eef1f3;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:"Segoe UI",Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);}
+header.app{background:var(--accent);color:#fff;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+header.app h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.3px;}
+header.app .sub{font-size:12px;opacity:.85;}
+nav.tabs{display:flex;background:#153a4d;flex-wrap:wrap;}
+nav.tabs button{background:none;border:none;color:#cfe0e8;padding:11px 18px;font-size:13px;cursor:pointer;border-bottom:3px solid transparent;}
+nav.tabs button:hover{background:#1b4965;color:#fff;}
+nav.tabs button.active{color:#fff;border-bottom-color:#5fb0d9;font-weight:600;}
+main{padding:20px;max-width:1300px;margin:0 auto;}
+section.view{display:none;}
+section.view.active{display:block;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:18px;margin-bottom:16px;}
+.panel h2{margin-top:0;font-size:15px;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:8px;}
+.panel h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}
+.dropzone{border:2px dashed #9fb3bf;border-radius:8px;padding:50px 20px;text-align:center;background:#f8fafb;cursor:pointer;transition:.15s;}
+.dropzone.drag{background:var(--accent-light);border-color:var(--accent);}
+.dropzone p{margin:6px 0;color:var(--muted);}
+.dropzone .big{font-size:16px;color:var(--accent);font-weight:600;}
+button.btn{background:var(--accent);color:#fff;border:none;padding:9px 16px;border-radius:4px;font-size:13px;cursor:pointer;}
+button.btn:hover{background:#123549;}
+button.btn.secondary{background:#fff;color:var(--accent);border:1px solid var(--accent);}
+button.btn.secondary:hover{background:var(--accent-light);}
+button.btn.small{padding:5px 10px;font-size:12px;}
+button.btn:disabled{opacity:.5;cursor:not-allowed;}
+input[type=file]{display:none;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;}
+.kpi{background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px 14px;}
+.kpi .val{font-size:22px;font-weight:700;color:var(--accent);}
+.kpi .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;}
+.kpi.ok .val{color:var(--ok);} .kpi.bad .val{color:var(--bad);} .kpi.warn .val{color:var(--partial);}
+table{width:100%;border-collapse:collapse;font-size:12.5px;}
+table th{background:#eef2f4;text-align:left;padding:7px 8px;border-bottom:2px solid var(--border);position:sticky;top:0;}
+table td{padding:6px 8px;border-bottom:1px solid #edf0f2;}
+table tr:hover td{background:#f7fafb;}
+.table-wrap{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:4px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.badge.TERMINADO{background:var(--ok-bg);color:var(--ok);}
+.badge.PENDIENTE{background:var(--bad-bg);color:var(--bad);}
+.badge.PARCIAL{background:var(--partial-bg);color:var(--partial);}
+.badge.EN_PROCESO{background:var(--proceso-bg);color:var(--proceso);}
+.badge.PLANIFICADO{background:var(--neutral-bg);color:var(--neutral);}
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;}
+.chart-box{background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px;}
+.chart-box canvas{max-height:260px;}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+.toolbar input[type=text]{padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;flex:1;min-width:180px;}
+.toolbar select{padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+.pill{display:inline-block;background:var(--accent-light);color:var(--accent);border-radius:12px;padding:3px 10px;font-size:11px;margin:2px;}
+.export-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.muted{color:var(--muted);font-size:12px;}
+.legend-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #eef0f2;}
+.swatch{width:22px;height:22px;border-radius:4px;border:1px solid #ccc;flex-shrink:0;}
+.legend-row input[type=color]{width:40px;height:28px;border:none;padding:0;background:none;}
+.legend-row label{font-size:12.5px;min-width:170px;}
+.warnbox{background:var(--warn-bg);border:1px solid #e6c766;color:#6b5300;padding:10px 14px;border-radius:4px;font-size:12.5px;margin-bottom:12px;}
+.emptybox{padding:30px;text-align:center;color:var(--muted);}
+.status-line{font-size:12.5px;margin-top:10px;color:var(--muted);}
+.status-line.ok{color:var(--ok);}
+.quicklinks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.detail-card{background:#fbfcfd;border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:8px;}
+.footer-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:20px;}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div>
+    <h1>Seguimiento de Producción — SOLDADURA</h1>
+    <div class="sub" id="hdrSub">Sin datos cargados</div>
+  </div>
+  <div class="sub">Aplicación local · el Excel original no se modifica</div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-view="cargar" class="active">Cargar Excel</button>
+  <button data-view="dashboard">Dashboard semanal</button>
+  <button data-view="pendientes">Pendientes</button>
+  <button data-view="historico">Histórico</button>
+  <button data-view="busqueda">Búsqueda</button>
+  <button data-view="config">Configuración</button>
+</nav>
+
+<main>
+
+<!-- ============ VISTA: CARGAR ============ -->
+<section class="view active" id="view-cargar">
+  <div class="panel">
+    <h2>1. Cargar el Excel de la semana</h2>
+    <p class="muted">Cargá el Excel de seguimiento tal como lo usa el planificador. No se modifica el archivo original; sólo se lee para generar el análisis.</p>
+    <div class="dropzone" id="dropzone">
+      <p class="big">ARRASTRAR EXCEL AQUÍ</p>
+      <p>o</p>
+      <button class="btn" id="btnSelect">SELECCIONAR ARCHIVO</button>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm">
+    </div>
+    <div id="loadStatus" class="status-line"></div>
+  </div>
+
+  <div class="panel" id="detectedPanel" style="display:none;">
+    <h2>2. Semanas detectadas en el archivo</h2>
+    <p class="muted" id="detectedInfo"></p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Semana</th><th>Año</th><th>Hoja de origen</th><th>Puestos</th><th>Trabajos detectados</th></tr></thead>
+        <tbody id="weekListBody"></tbody>
+      </table>
+    </div>
+    <div class="export-row">
+      <button class="btn" id="btnAnalyzeSelected">ANALIZAR SEMANA(S) SELECCIONADA(S)</button>
+      <span class="muted" id="analyzeHint">Tildá una o más semanas de la lista para procesarlas y guardarlas en el histórico.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VISTA: DASHBOARD ============ -->
+<section class="view" id="view-dashboard">
+  <div class="panel" id="dashEmpty"><div class="emptybox">Todavía no analizaste ninguna semana. Andá a "Cargar Excel".</div></div>
+  <div id="dashContent" style="display:none;">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <h2 style="border:none;margin:0;">Semana <span id="dashSemana"></span></h2>
+        <select id="dashWeekSelect"></select>
+      </div>
+      <div class="kpi-grid" id="kpiGrid"></div>
+      <div class="export-row">
+        <button class="btn secondary small" data-export="resumen">Exportar resumen semanal</button>
+        <button class="btn secondary small" data-export="operarios">Exportar operarios</button>
+        <button class="btn secondary small" data-export="puestos">Exportar puestos</button>
+        <button class="btn secondary small" data-export="dias">Exportar productividad por día</button>
+        <button class="btn secondary small" data-export="datos">Exportar datos completos normalizados</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Gráficos de la semana</h2>
+      <div class="charts-grid">
+        <div class="chart-box"><h3>Cumplimiento por día</h3><canvas id="chartDia"></canvas></div>
+        <div class="chart-box"><h3>Producción por puesto</h3><canvas id="chartPuesto"></canvas></div>
+        <div class="chart-box"><h3>Cumplimiento por operario</h3><canvas id="chartOperario"></canvas></div>
+        <div class="chart-box"><h3>Pendientes por código (top 10)</h3><canvas id="chartCodigo"></canvas></div>
+        <div class="chart-box"><h3>Distribución de estados</h3><canvas id="chartEstados"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Detalle por operario</h2>
+      <div class="table-wrap"><table id="tblOperarios"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>Detalle por puesto</h2>
+      <div class="table-wrap"><table id="tblPuestos"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel" id="panelRevisar" style="display:none;">
+      <h2>Elementos a revisar manualmente</h2>
+      <p class="muted">Celdas del Excel donde no se pudo identificar código de pieza con certeza, o cuya descripción quedó incompleta. No se inventaron datos: revisalas en el Excel original.</p>
+      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VISTA: PENDIENTES ============ -->
+<section class="view" id="view-pendientes">
+  <div class="panel">
+    <h2>Pendientes de la semana</h2>
+    <div class="toolbar">
+      <select id="pendWeekSelect"></select>
+      <input type="text" id="pendFilter" placeholder="Filtrar por código, WO, operario o puesto...">
+      <button class="btn secondary small" data-export="pendientes">Exportar pendientes</button>
+    </div>
+    <div class="table-wrap">
+      <table id="tblPendientes">
+        <thead><tr><th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Semana</th><th>Estado</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VISTA: HISTÓRICO ============ -->
+<section class="view" id="view-historico">
+  <div class="panel">
+    <h2>Semanas guardadas en el histórico</h2>
+    <div class="table-wrap">
+      <table id="tblHistoricoSemanas"><thead><tr><th>Semana</th><th>Año</th><th>Trabajos</th><th>Cumplimiento</th><th>Guardada</th><th></th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="export-row"><button class="btn secondary small" data-export="historico">Exportar histórico completo</button></div>
+  </div>
+
+  <div class="panel">
+    <h2>Evolución del cumplimiento semana a semana</h2>
+    <div class="chart-box"><canvas id="chartEvolucion"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <h2>Preguntas frecuentes sobre el histórico</h2>
+    <div class="quicklinks" id="historicoQuestions"></div>
+    <div id="historicoAnswer"></div>
+  </div>
+</section>
+
+<!-- ============ VISTA: BÚSQUEDA ============ -->
+<section class="view" id="view-busqueda">
+  <div class="panel">
+    <h2>Buscar código / WO / operario / puesto</h2>
+    <div class="toolbar">
+      <input type="text" id="searchInput" placeholder="Ej: H0001849, WO-128716, PEREZ.M, S-03...">
+      <button class="btn" id="btnSearch">Buscar</button>
+    </div>
+    <div id="searchResults"></div>
+  </div>
+</section>
+
+<!-- ============ VISTA: CONFIGURACIÓN ============ -->
+<section class="view" id="view-config">
+  <div class="panel">
+    <h2>Cómo se interpretan los datos del Excel</h2>
+    <p class="muted">La aplicación combina <b>color de la celda</b>, <b>texto</b> (patrones como "x5" o "x3 DE 5") y <b>estructura de la hoja</b> (bloques de TURNO/OPERARIOS/PUESTO, columnas por día) para reconstruir cada trabajo. El color, cuando coincide con la leyenda del Excel, tiene prioridad sobre el texto para determinar si un trabajo está terminado o no realizado.</p>
+    <h3>Leyenda de colores (según el propio Excel)</h3>
+    <div id="legendEditor"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px;font-size:13px;">
+      <input type="checkbox" id="chkUncoloredPending" checked>
+      Tratar las celdas sin color asignado (y sin "X DE Y" en el texto) como <b>PENDIENTE</b> (no realizado). Si lo destildás, se marcarán como "PLANIFICADO" sin cantidad realizada/pendiente definida.
+    </label>
+    <button class="btn small" id="btnSaveConfig" style="margin-top:12px;">Guardar configuración</button>
+  </div>
+  <div class="panel">
+    <h2>Datos guardados en esta PC</h2>
+    <p class="muted">El histórico se guarda en el navegador de esta computadora (localStorage), no se envía a ningún servidor.</p>
+    <div class="export-row">
+      <button class="btn secondary small" id="btnBackup">Descargar copia de seguridad (JSON)</button>
+      <button class="btn secondary small" id="btnRestore">Restaurar copia de seguridad</button>
+      <input type="file" id="restoreInput" accept=".json" style="display:none;">
+      <button class="btn secondary small" id="btnClearAll" style="border-color:var(--bad);color:var(--bad);">Borrar todo el histórico</button>
+    </div>
+  </div>
+</section>
+
+</main>
+<div class="footer-note">Los datos se calculan de forma determinística a partir del Excel — no se generan cifras ficticias.</div>
+
+<script>
+/* =====================================================================
+   ARQUITECTURA (separada en capas, según lo pedido):
+   1. LECTURA        -> ExcelReader
+   2. INTERPRETACIÓN -> GridParser (bloques TURNO/día, notas, celdas)
+   3. NORMALIZACIÓN  -> Normalizer (texto -> {codigo, wo, cantidades, estado})
+   4. CÁLCULOS       -> Calc (KPIs, agregaciones, consultas históricas)
+   5. ALMACENAMIENTO -> Store (localStorage)
+   6. VISUALIZACIÓN  -> UI + Charts
+   7. EXPORTACIÓN    -> Exporter (ExcelJS)
+   Preparado para que "Store" pueda reemplazarse en el futuro por una
+   base de datos real sin tocar el resto de las capas.
+===================================================================== */
+
+/* ---------------------- 1. LECTURA ---------------------- */
+const ExcelReader = {
+  async loadWorkbook(file) {
+    const buf = await file.arrayBuffer();
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    return wb;
+  },
+  /** Convierte una hoja a una lista de celdas no vacías con su color de fondo.
+   *  Para celdas combinadas (merge) sólo se conserva la celda ancla (arriba-izquierda). */
+  sheetToCells(ws) {
+    const cells = [];
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        if (cell.isMerged && cell.master && cell.master.address !== cell.address) return;
+        let value = cell.value;
+        if (value && typeof value === 'object') {
+          if (value.richText) value = value.richText.map(r => r.text).join('');
+          else if (value.result !== undefined) value = value.result;
+          else if (value.text) value = value.text;
+        }
+        if (value === null || value === undefined) return;
+        value = String(value).trim();
+        if (!value) return;
+        let fill = null;
+        try {
+          if (cell.fill && cell.fill.type === 'pattern' && cell.fill.fgColor && cell.fill.fgColor.argb) {
+            fill = cell.fill.fgColor.argb;
+          }
+        } catch (e) {}
+        cells.push({ row: rowNumber, col: colNumber, addr: cell.address, value, fill });
+      });
+    });
+    return cells;
+  }
+};
+
+/* ---------------------- 2. INTERPRETACIÓN ---------------------- */
+const MESES = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+const DIAS_HEADER = ['LUNES','MARTES','MIÉRCOLES','MIERCOLES','JUEVES','VIERNES','SÁBADO','SABADO','DOMINGO'];
+
+const GridParser = {
+  /** Detecta bloques de semana dentro de una hoja: busca en la columna A
+   *  celdas que matcheen "W35", "W 35", "S-03" (algunas hojas viejas), etc. */
+  findWeekBlocks(cells) {
+    const weekCells = cells.filter(c => c.col === 1 && /^W\s?\d{1,2}$/i.test(c.value));
+    const blocks = [];
+    for (let i = 0; i < weekCells.length; i++) {
+      const start = weekCells[i].row;
+      const end = (i + 1 < weekCells.length) ? weekCells[i + 1].row - 1 : Infinity;
+      const label = weekCells[i].value.replace(/\s+/g, '').toUpperCase();
+      blocks.push({ semanaLabel: label, rowStart: start, rowEnd: end });
+    }
+    return blocks;
+  },
+
+  /** Dentro de un bloque de semana, encuentra los bloques de puesto (filas "TURNO: ..."). */
+  findPuestoBlocks(cells, rowStart, rowEnd) {
+    const headerRows = cells.filter(c => c.col === 1 && c.row >= rowStart && c.row <= rowEnd && /^TURNO:/i.test(c.value));
+    const blocks = [];
+    for (let i = 0; i < headerRows.length; i++) {
+      const hRow = headerRows[i].row;
+      const nextHRow = (i + 1 < headerRows.length) ? headerRows[i + 1].row : rowEnd + 1;
+      const rowOperarios = cells.find(c => c.row === hRow && c.col === 3 && /^OPERARIOS:/i.test(c.value));
+      const rowPuesto = cells.find(c => c.row === hRow && (c.col === 6 || c.col === 5) && /^PUESTO:/i.test(c.value))
+                     || cells.find(c => c.row === hRow && /^PUESTO:/i.test(c.value));
+      blocks.push({
+        turno: headerRows[i].value.replace(/^TURNO:\s*/i, '').trim(),
+        operario: rowOperarios ? rowOperarios.value.replace(/^OPERARIOS:\s*/i, '').trim() : '(sin especificar)',
+        puesto: rowPuesto ? rowPuesto.value.replace(/^PUESTO:\s*/i, '').trim() : '(sin especificar)',
+        headerRow: hRow,
+        dataStart: hRow + 1,
+        dataEnd: nextHRow - 1
+      });
+    }
+    return blocks;
+  },
+
+  /** Detecta qué columnas corresponden a qué día, a partir de la fila de encabezado
+   *  (LUNES/MARTES/... ). Si no encuentra encabezado en el bloque semanal, usa el
+   *  layout estándar A/C/E/G/I = Lun..Vie, K = adicional. */
+  findDayColumns(cells, rowStart, rowEnd) {
+    const headerRow = cells.find(c => c.row >= rowStart && c.row <= rowEnd + 3 && DIAS_HEADER.includes(c.value.toUpperCase()));
+    const map = {};
+    if (headerRow) {
+      const rowNum = headerRow.row;
+      cells.filter(c => c.row === rowNum && DIAS_HEADER.includes(c.value.toUpperCase()))
+        .forEach(c => { map[c.col] = normalizeDayName(c.value); });
+    }
+    if (Object.keys(map).length === 0) {
+      map[1] = 'LUNES'; map[3] = 'MARTES'; map[5] = 'MIÉRCOLES'; map[7] = 'JUEVES'; map[9] = 'VIERNES';
+    }
+    return map;
+  }
+};
+
+function normalizeDayName(s) {
+  const u = s.toUpperCase().trim();
+  if (u === 'MIERCOLES') return 'MIÉRCOLES';
+  if (u === 'SABADO') return 'SÁBADO';
+  return u;
+}
+
+/* ---------------------- 3. NORMALIZACIÓN ---------------------- */
+const Normalizer = {
+  extract(rawText) {
+    const text = rawText.replace(/\r/g, '');
+    const woMatches = [...text.matchAll(/WO-?\s?(\d{4,7})/gi)].map(m => m[1]);
+    const codeMatches = [...text.matchAll(/\b([A-PR-VYZ]{1,2}\d{5,8})\b/g)].map(m => m[1]).filter(c => !/^WO/i.test(c));
+    const codigo = codeMatches[0] || null;
+
+    let planificada = null, realizada = null, esParcial = false;
+    const deMatch = text.match(/x\s?(\d+(?:[.,]\d+)?)\s*DE\s*(\d+(?:[.,]\d+)?)/i);
+    if (deMatch) {
+      realizada = parseFloat(deMatch[1].replace(',', '.'));
+      planificada = parseFloat(deMatch[2].replace(',', '.'));
+      esParcial = true;
+    } else {
+      const xMatch = text.match(/x\s?(\d+(?:[.,]\d+)?)/i);
+      if (xMatch) planificada = parseFloat(xMatch[1].replace(',', '.'));
+    }
+
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    let descLines = [];
+    for (const l of lines) {
+      if (codigo && l.includes(codigo)) break;
+      if (/x\s?\d/.test(l) && /WO/i.test(l)) break;
+      descLines.push(l);
+    }
+    let leadingSuffix = '';
+    if (codigo) {
+      const idx = text.indexOf(codigo);
+      const before = text.substring(0, idx).split('\n').pop().trim();
+      if (before && before.length <= 18 && descLines.length === 0) leadingSuffix = before;
+    }
+    return { codigo, wo: woMatches, planificada, realizada, esParcial, descripcion: descLines.join(' ').trim(), leadingSuffix, raw: text };
+  },
+
+  esNota(text) {
+    if (/WO-?\s?\d/i.test(text)) return false;
+    const monthRe = new RegExp('\\(\\s?(' + MESES.join('|') + ')\\s?\\)\\s*$', 'i');
+    return monthRe.test(text);
+  },
+
+  determineEstado(info, fillArgb, legend, treatUncoloredAsPending) {
+    let estado, planificada = info.planificada, realizada = info.realizada, pendiente = null;
+    const colorKey = matchLegendColor(fillArgb, legend);
+    if (colorKey === 'terminado') {
+      estado = 'TERMINADO';
+      realizada = planificada != null ? planificada : realizada;
+      pendiente = 0;
+    } else if (colorKey === 'no_realizado') {
+      estado = 'PENDIENTE';
+      realizada = 0;
+      pendiente = planificada;
+    } else if (colorKey === 'parcial' || info.esParcial) {
+      estado = 'PARCIAL';
+      if (planificada != null && realizada != null) pendiente = Math.max(planificada - realizada, 0);
+    } else if (colorKey === 'en_proceso') {
+      estado = 'EN_PROCESO';
+      if (info.esParcial && planificada != null && realizada != null) pendiente = Math.max(planificada - realizada, 0);
+    } else {
+      if (treatUncoloredAsPending) {
+        estado = 'PENDIENTE';
+        realizada = 0;
+        pendiente = planificada;
+      } else {
+        estado = 'PLANIFICADO';
+      }
+    }
+    return { estado, planificada, realizada, pendiente };
+  }
+};
+
+function matchLegendColor(argb, legend) {
+  if (!argb) return null;
+  for (const key of ['terminado', 'no_realizado', 'parcial', 'en_proceso']) {
+    if (legend[key] && legend[key].toUpperCase() === argb.toUpperCase()) return key;
+  }
+  return null;
+}
+
+/* -------- Orquestador: convierte una hoja completa en registros -------- */
+function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fallbackYear) {
+  const cells = ExcelReader.sheetToCells(ws);
+  const weekBlocks = GridParser.findWeekBlocks(cells);
+  const records = [];
+  const revisar = [];
+  const semanasResumen = [];
+
+  const yearFromSheet = (sheetName.match(/\b(20\d{2})\b/) || [])[1];
+
+  for (const wb of weekBlocks) {
+    const puestoBlocks = GridParser.findPuestoBlocks(cells, wb.rowStart, wb.rowEnd);
+    const dayCols = GridParser.findDayColumns(cells, wb.rowStart, wb.rowEnd);
+    const dayColNums = Object.keys(dayCols).map(Number).sort((a, b) => a - b);
+    let anio = yearFromSheet ? parseInt(yearFromSheet) : fallbackYear;
+
+    let countJobs = 0;
+    for (const pb of puestoBlocks) {
+      // pendingDescription por columna de día (para celdas partidas en varias filas)
+      const pending = {};
+      for (let r = pb.dataStart; r <= pb.dataEnd; r++) {
+        for (const col of dayColNums) {
+          const cell = cells.find(c => c.row === r && c.col === col);
+          if (!cell) continue;
+          if (r === pb.dataStart) continue; // fila inmediatamente bajo el encabezado = notas de insumos
+          if (DIAS_HEADER.includes(cell.value.toUpperCase())) continue;
+          if (Normalizer.esNota(cell.value)) continue;
+
+          const info = Normalizer.extract(cell.value);
+          if (!info.codigo) {
+            // fragmento de descripción sin código: se guarda para la próxima celda con código en esta columna
+            pending[col] = pending[col] ? pending[col] + ' ' + cell.value.replace(/\n/g, ' ') : cell.value.replace(/\n/g, ' ');
+            continue;
+          }
+          let descripcion = info.descripcion;
+          if (!descripcion && pending[col]) descripcion = pending[col];
+          if (info.leadingSuffix) descripcion = (descripcion ? descripcion + ' - ' : '') + info.leadingSuffix;
+          if (!descripcion) descripcion = '(sin descripción)';
+
+          const { estado, planificada, realizada, pendiente } = Normalizer.determineEstado(info, cell.fill, legend, treatUncoloredAsPending);
+          if (planificada == null) {
+            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col] });
+            continue;
+          }
+          records.push({
+            anio, semana: wb.semanaLabel, dia: dayCols[col], turno: pb.turno,
+            puesto: pb.puesto, operario: pb.operario,
+            codigo: info.codigo, wo: info.wo.join('|'), descripcion,
+            cantidad_planificada: planificada,
+            cantidad_realizada: realizada,
+            cantidad_pendiente: pendiente,
+            estado, colorDetectado: cell.fill || null, celda: cell.addr, hoja: sheetName
+          });
+          countJobs++;
+        }
+      }
+    }
+    semanasResumen.push({ semana: wb.semanaLabel, anio, hoja: sheetName, puestos: puestoBlocks.length, trabajos: countJobs, rowStart: wb.rowStart, rowEnd: wb.rowEnd === Infinity ? null : wb.rowEnd });
+  }
+  return { records, revisar, semanasResumen };
+}
+
+/* ---------------------- 4. CÁLCULOS ---------------------- */
+const Calc = {
+  resumenSemana(records) {
+    const r = { totalTrabajos: records.length, piezasPlanificadas: 0, piezasRealizadas: 0, piezasPendientes: 0,
+      terminados: 0, parciales: 0, pendientes: 0, enProceso: 0, planificados: 0 };
+    for (const rec of records) {
+      r.piezasPlanificadas += rec.cantidad_planificada || 0;
+      r.piezasRealizadas += rec.cantidad_realizada || 0;
+      r.piezasPendientes += rec.cantidad_pendiente || 0;
+      if (rec.estado === 'TERMINADO') r.terminados++;
+      else if (rec.estado === 'PARCIAL') r.parciales++;
+      else if (rec.estado === 'PENDIENTE') r.pendientes++;
+      else if (rec.estado === 'EN_PROCESO') r.enProceso++;
+      else r.planificados++;
+    }
+    r.cumplimiento = r.piezasPlanificadas > 0 ? (r.piezasRealizadas / r.piezasPlanificadas * 100) : 0;
+    return r;
+  },
+  groupBy(records, keyFn) {
+    const map = new Map();
+    for (const rec of records) {
+      const k = keyFn(rec);
+      if (!map.has(k)) map.set(k, { key: k, planificada: 0, realizada: 0, pendiente: 0, trabajos: 0, terminados: 0, pendientesN: 0 });
+      const g = map.get(k);
+      g.planificada += rec.cantidad_planificada || 0;
+      g.realizada += rec.cantidad_realizada || 0;
+      g.pendiente += rec.cantidad_pendiente || 0;
+      g.trabajos++;
+      if (rec.estado === 'TERMINADO') g.terminados++;
+      if (rec.estado === 'PENDIENTE' || rec.estado === 'PARCIAL') g.pendientesN++;
+    }
+    return [...map.values()].map(g => ({ ...g, cumplimiento: g.planificada > 0 ? g.realizada / g.planificada * 100 : 0 }));
+  },
+  pendientesCodigo(records) {
+    return this.groupBy(records.filter(r => (r.cantidad_pendiente || 0) > 0), r => r.codigo)
+      .sort((a, b) => b.pendiente - a.pendiente);
+  },
+  /** Estado más reciente de cada (codigo, wo) a través de todo el histórico, usado
+   *  para responder preguntas de seguimiento entre semanas. */
+  estadoActualPorWO(allRecords) {
+    const order = allRecords.slice().sort((a, b) => weekSortKey(a) - weekSortKey(b));
+    const map = new Map();
+    for (const rec of order) {
+      const key = rec.codigo + '|' + (rec.wo || '');
+      if (!map.has(key)) map.set(key, { historial: [] });
+      const entry = map.get(key);
+      entry.ultimo = rec;
+      entry.historial.push(rec);
+    }
+    return map;
+  }
+};
+
+function weekSortKey(rec) {
+  const n = parseInt((rec.semana || 'W0').replace(/\D/g, '')) || 0;
+  return (rec.anio || 0) * 100 + n;
+}
+
+/* ---------------------- 5. ALMACENAMIENTO ---------------------- */
+const Store = {
+  KEY: 'soldadura_historico_v1',
+  CONFIG_KEY: 'soldadura_config_v1',
+  load() {
+    try { return JSON.parse(localStorage.getItem(this.KEY)) || { semanas: [] }; }
+    catch (e) { return { semanas: [] }; }
+  },
+  save(data) { localStorage.setItem(this.KEY, JSON.stringify(data)); },
+  loadConfig() {
+    try {
+      return JSON.parse(localStorage.getItem(this.CONFIG_KEY)) || defaultConfig();
+    } catch (e) { return defaultConfig(); }
+  },
+  saveConfig(cfg) { localStorage.setItem(this.CONFIG_KEY, JSON.stringify(cfg)); },
+  /** Guarda o reemplaza (si ya existía) los datos de una semana analizada. */
+  upsertWeek(weekId, meta, records) {
+    const data = this.load();
+    const idx = data.semanas.findIndex(w => w.id === weekId);
+    const entry = { id: weekId, ...meta, records, guardada: new Date().toISOString() };
+    if (idx >= 0) data.semanas[idx] = entry; else data.semanas.push(entry);
+    this.save(data);
+    return entry;
+  },
+  removeWeek(weekId) {
+    const data = this.load();
+    data.semanas = data.semanas.filter(w => w.id !== weekId);
+    this.save(data);
+  },
+  allRecords() {
+    return this.load().semanas.flatMap(w => w.records);
+  }
+};
+
+function defaultConfig() {
+  return {
+    legend: { terminado: 'FF00FF00', no_realizado: 'FFFF0000', parcial: 'FFFF9900', en_proceso: 'FFFFFF00' },
+    treatUncoloredAsPending: true
+  };
+}
+
+/* ---------------------- ESTADO GLOBAL DE LA APP ---------------------- */
+const App = {
+  workbook: null,
+  fileName: null,
+  detectedWeeks: [], // {id, semana, anio, hoja, ws, meta}
+  currentWeekRecords: [],
+  currentWeekRevisar: [],
+  currentWeekId: null,
+  config: Store.loadConfig(),
+  charts: {}
+};
+
+/* ---------------------- UI: navegación ---------------------- */
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  showView(btn.dataset.view);
+});
+function showView(name) {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  document.querySelectorAll('section.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + name));
+  if (name === 'pendientes') renderPendientesView();
+  if (name === 'historico') renderHistoricoView();
+  if (name === 'config') renderConfigView();
+}
+
+/* ---------------------- UI: carga de archivo ---------------------- */
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+document.getElementById('btnSelect').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+dropzone.addEventListener('click', () => fileInput.click());
+
+async function handleFile(file) {
+  const statusEl = document.getElementById('loadStatus');
+  statusEl.textContent = 'Leyendo archivo...';
+  try {
+    App.workbook = await ExcelReader.loadWorkbook(file);
+    App.fileName = file.name;
+    App.detectedWeeks = [];
+    const currentYear = new Date().getFullYear();
+
+    App.workbook.eachSheet(ws => {
+      if (ws.state === 'hidden' || ws.state === 'veryHidden') return; // se respetan hojas ocultas del planificador
+      const cells = ExcelReader.sheetToCells(ws);
+      const blocks = GridParser.findWeekBlocks(cells);
+      for (const b of blocks) {
+        const yearMatch = ws.name.match(/\b(20\d{2})\b/);
+        const anio = yearMatch ? parseInt(yearMatch[1]) : currentYear;
+        App.detectedWeeks.push({ id: anio + '-' + b.semanaLabel, semana: b.semanaLabel, anio, hoja: ws.name, ws, rowStart: b.rowStart, rowEnd: b.rowEnd });
+      }
+    });
+
+    if (App.detectedWeeks.length === 0) {
+      statusEl.textContent = 'No se detectó ninguna semana (celda tipo "W35") en el archivo. Verificá que sea el Excel de seguimiento.';
+      statusEl.className = 'status-line';
+      return;
+    }
+    statusEl.textContent = `Archivo "${file.name}" cargado. ${App.detectedWeeks.length} semana(s) detectada(s).`;
+    statusEl.className = 'status-line ok';
+    renderDetectedWeeks();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Error al leer el archivo: ' + err.message;
+  }
+}
+
+function renderDetectedWeeks() {
+  const panel = document.getElementById('detectedPanel');
+  panel.style.display = 'block';
+  document.getElementById('detectedInfo').textContent =
+    App.detectedWeeks.length === 1
+      ? `Semana detectada: ${App.detectedWeeks[0].semana}`
+      : `Se detectaron ${App.detectedWeeks.length} semanas (por ejemplo si cargaste una hoja histórica completa).`;
+  const tbody = document.getElementById('weekListBody');
+  tbody.innerHTML = '';
+  App.detectedWeeks.forEach((w, i) => {
+    // vista previa liviana para contar puestos/trabajos aproximados
+    const cells = ExcelReader.sheetToCells(w.ws);
+    const puestos = GridParser.findPuestoBlocks(cells, w.rowStart, w.rowEnd).length;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input type="checkbox" class="weekCheck" data-idx="${i}" ${App.detectedWeeks.length === 1 ? 'checked' : ''}></td>
+      <td><b>${w.semana}</b></td><td>${w.anio}</td><td>${w.hoja}</td><td>${puestos}</td><td>—</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('btnAnalyzeSelected').addEventListener('click', () => {
+  const checks = [...document.querySelectorAll('.weekCheck:checked')];
+  if (checks.length === 0) { alert('Tildá al menos una semana para analizar.'); return; }
+  let lastId = null;
+  for (const chk of checks) {
+    const w = App.detectedWeeks[parseInt(chk.dataset.idx)];
+    const { records, revisar } = parseSheetToRecords(w.ws, w.hoja, App.config.legend, App.config.treatUncoloredAsPending, w.anio);
+    const semanaRecords = records.filter(r => r.semana === w.semana);
+    const entry = Store.upsertWeek(w.id, { semana: w.semana, anio: w.anio, hoja: w.hoja }, semanaRecords);
+    lastId = entry.id;
+    if (checks.length === 1) { App.currentWeekRevisar = revisar; }
+  }
+  App.currentWeekId = lastId;
+  loadCurrentWeekFromStore(lastId);
+  showView('dashboard');
+});
+
+function loadCurrentWeekFromStore(weekId) {
+  const data = Store.load();
+  const w = data.semanas.find(s => s.id === weekId);
+  if (!w) return;
+  App.currentWeekRecords = w.records;
+  App.currentWeekId = weekId;
+  renderDashboard();
+}
+
+/* ---------------------- UI: Dashboard ---------------------- */
+function renderDashboard() {
+  const data = Store.load();
+  document.getElementById('dashEmpty').style.display = data.semanas.length ? 'none' : 'block';
+  document.getElementById('dashContent').style.display = data.semanas.length ? 'block' : 'none';
+  if (!data.semanas.length) return;
+
+  const sel = document.getElementById('dashWeekSelect');
+  sel.innerHTML = data.semanas.slice().sort((a, b) => weekSortKey({ semana: b.semana, anio: b.anio }) - weekSortKey({ semana: a.semana, anio: a.anio }))
+    .map(w => `<option value="${w.id}" ${w.id === App.currentWeekId ? 'selected' : ''}>${w.semana} (${w.anio})</option>`).join('');
+  sel.onchange = () => loadCurrentWeekFromStore(sel.value);
+
+  const records = App.currentWeekRecords;
+  const w = data.semanas.find(s => s.id === App.currentWeekId) || data.semanas[data.semanas.length - 1];
+  document.getElementById('dashSemana').textContent = w.semana + ' (' + w.anio + ')';
+  document.getElementById('hdrSub').textContent = `Última semana analizada: ${w.semana} — ${records.length} trabajos`;
+
+  const r = Calc.resumenSemana(records);
+  const kpis = [
+    ['Trabajos totales', r.totalTrabajos, ''],
+    ['Piezas planificadas', r.piezasPlanificadas, ''],
+    ['Piezas realizadas', r.piezasRealizadas, 'ok'],
+    ['Piezas pendientes', r.piezasPendientes, r.piezasPendientes > 0 ? 'bad' : 'ok'],
+    ['Trabajos terminados', r.terminados, 'ok'],
+    ['Trabajos parciales', r.parciales, 'warn'],
+    ['Trabajos pendientes', r.pendientes, r.pendientes > 0 ? 'bad' : 'ok'],
+    ['% Cumplimiento', r.cumplimiento.toFixed(1) + '%', r.cumplimiento >= 90 ? 'ok' : (r.cumplimiento >= 60 ? 'warn' : 'bad')]
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpis.map(([l, v, c]) =>
+    `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+
+  renderCharts(records);
+  renderGroupTable('tblOperarios', Calc.groupBy(records, x => x.operario), 'Operario');
+  renderGroupTable('tblPuestos', Calc.groupBy(records, x => x.puesto), 'Puesto');
+
+  const revisarPanel = document.getElementById('panelRevisar');
+  if (App.currentWeekRevisar && App.currentWeekRevisar.length) {
+    revisarPanel.style.display = 'block';
+    document.querySelector('#tblRevisar tbody').innerHTML = App.currentWeekRevisar.map(x =>
+      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td></tr>`).join('');
+  } else {
+    revisarPanel.style.display = 'none';
+  }
+}
+
+function renderGroupTable(tableId, groups, labelName) {
+  const table = document.getElementById(tableId);
+  table.querySelector('thead').innerHTML = `<tr><th>${labelName}</th><th>Trabajos</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Terminados</th><th>Cumplimiento</th></tr>`;
+  table.querySelector('tbody').innerHTML = groups.sort((a, b) => b.pendiente - a.pendiente).map(g =>
+    `<tr><td>${g.key}</td><td>${g.trabajos}</td><td>${g.planificada}</td><td>${g.realizada}</td><td>${g.pendiente}</td><td>${g.terminados}</td><td>${g.cumplimiento.toFixed(1)}%</td></tr>`
+  ).join('');
+}
+
+function renderCharts(records) {
+  const diaOrder = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+  const byDia = Calc.groupBy(records, x => x.dia).sort((a, b) => diaOrder.indexOf(a.key) - diaOrder.indexOf(b.key));
+  drawBar('chartDia', byDia.map(g => g.key), [{ label: '% Cumplimiento', data: byDia.map(g => +g.cumplimiento.toFixed(1)), color: '#1b4965' }]);
+
+  const byPuesto = Calc.groupBy(records, x => x.puesto);
+  drawBar('chartPuesto', byPuesto.map(g => g.key), [
+    { label: 'Planificada', data: byPuesto.map(g => g.planificada), color: '#8fb8cc' },
+    { label: 'Realizada', data: byPuesto.map(g => g.realizada), color: '#1e8e3e' }
+  ]);
+
+  const byOp = Calc.groupBy(records, x => x.operario);
+  drawBar('chartOperario', byOp.map(g => g.key), [{ label: '% Cumplimiento', data: byOp.map(g => +g.cumplimiento.toFixed(1)), color: '#e08a00' }]);
+
+  const pend = Calc.pendientesCodigo(records).slice(0, 10);
+  drawBar('chartCodigo', pend.map(g => g.key), [{ label: 'Pendiente', data: pend.map(g => g.pendiente), color: '#d23c2c' }], true);
+
+  const r = Calc.resumenSemana(records);
+  drawPie('chartEstados',
+    ['Terminado', 'Parcial', 'Pendiente', 'En proceso', 'Planificado'],
+    [r.terminados, r.parciales, r.pendientes, r.enProceso, r.planificados],
+    ['#1e8e3e', '#e08a00', '#d23c2c', '#c9a300', '#8a97a3']);
+}
+
+function drawBar(canvasId, labels, series, horizontal) {
+  if (App.charts[canvasId]) App.charts[canvasId].destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  App.charts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: series.map(s => ({ label: s.label, data: s.data, backgroundColor: s.color })) },
+    options: { indexAxis: horizontal ? 'y' : 'x', responsive: true, plugins: { legend: { display: series.length > 1 } }, scales: { y: { beginAtZero: true } } }
+  });
+}
+function drawPie(canvasId, labels, data, colors) {
+  if (App.charts[canvasId]) App.charts[canvasId].destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  App.charts[canvasId] = new Chart(ctx, { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: colors }] }, options: { responsive: true } });
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-export]');
+  if (btn) doExport(btn.dataset.export);
+});
+
+/* ---------------------- UI: Pendientes ---------------------- */
+function renderPendientesView() {
+  const data = Store.load();
+  const sel = document.getElementById('pendWeekSelect');
+  sel.innerHTML = `<option value="__ALL__">Todas las semanas guardadas</option>` +
+    data.semanas.slice().sort((a, b) => weekSortKey({ semana: b.semana, anio: b.anio }) - weekSortKey({ semana: a.semana, anio: a.anio }))
+      .map(w => `<option value="${w.id}">${w.semana} (${w.anio})</option>`).join('');
+  sel.value = App.currentWeekId || '__ALL__';
+  sel.onchange = () => drawPendientesTable();
+  document.getElementById('pendFilter').oninput = () => drawPendientesTable();
+  drawPendientesTable();
+}
+function drawPendientesTable() {
+  const data = Store.load();
+  const weekId = document.getElementById('pendWeekSelect').value;
+  let records = weekId === '__ALL__' ? Store.allRecords() : (data.semanas.find(w => w.id === weekId) || { records: [] }).records;
+  let pend = records.filter(r => (r.cantidad_pendiente || 0) > 0);
+  const filter = document.getElementById('pendFilter').value.trim().toLowerCase();
+  if (filter) pend = pend.filter(r => [r.codigo, r.wo, r.operario, r.puesto].join(' ').toLowerCase().includes(filter));
+  document.querySelector('#tblPendientes tbody').innerHTML = pend.map(r =>
+    `<tr><td>${r.codigo}</td><td>${escapeHtml(r.descripcion)}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.operario}</td>
+     <td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td>${r.semana} (${r.anio})</td>
+     <td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`).join('') ||
+    `<tr><td colspan="10" class="muted" style="text-align:center;padding:20px;">Sin pendientes para este filtro.</td></tr>`;
+}
+
+/* ---------------------- UI: Histórico ---------------------- */
+function renderHistoricoView() {
+  const data = Store.load();
+  const tbody = document.querySelector('#tblHistoricoSemanas tbody');
+  const sorted = data.semanas.slice().sort((a, b) => weekSortKey(a) - weekSortKey(b));
+  tbody.innerHTML = sorted.map(w => {
+    const r = Calc.resumenSemana(w.records);
+    return `<tr><td>${w.semana}</td><td>${w.anio}</td><td>${w.records.length}</td><td>${r.cumplimiento.toFixed(1)}%</td>
+      <td>${new Date(w.guardada).toLocaleDateString('es-AR')}</td>
+      <td><button class="btn small secondary" data-del="${w.id}">Eliminar</button></td></tr>`;
+  }).join('') || `<tr><td colspan="6" class="muted" style="text-align:center;padding:20px;">Todavía no hay semanas guardadas.</td></tr>`;
+  tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    if (confirm('¿Eliminar esta semana del histórico?')) { Store.removeWeek(b.dataset.del); renderHistoricoView(); }
+  });
+
+  if (App.charts.chartEvolucion) App.charts.chartEvolucion.destroy();
+  const ctx = document.getElementById('chartEvolucion').getContext('2d');
+  App.charts.chartEvolucion = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: sorted.map(w => w.semana + "'" + String(w.anio).slice(2)),
+      datasets: [{ label: '% Cumplimiento', data: sorted.map(w => +Calc.resumenSemana(w.records).cumplimiento.toFixed(1)), borderColor: '#1b4965', backgroundColor: '#8fb8cc', tension: .25, fill: true }]
+    },
+    options: { scales: { y: { beginAtZero: true, max: 100 } } }
+  });
+
+  renderHistoricoQuestions();
+}
+
+function renderHistoricoQuestions() {
+  const qs = [
+    ['¿Qué códigos están pendientes actualmente?', q_pendientesActuales],
+    ['¿Qué códigos llevan más de una semana pendientes?', q_pendientesRecurrentes],
+    ['¿Qué operario acumula más faltantes?', q_operarioFaltantes],
+    ['¿Qué puesto presenta más incumplimientos?', q_puestoIncumplimientos],
+    ['¿Qué día tiene menor cumplimiento?', q_diaMenorCumplimiento],
+    ['¿Cuál fue la semana con menor cumplimiento?', q_semanaMenorCumplimiento]
+  ];
+  const box = document.getElementById('historicoQuestions');
+  box.innerHTML = qs.map((q, i) => `<button class="btn secondary small" data-q="${i}">${q[0]}</button>`).join('');
+  box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+    document.getElementById('historicoAnswer').innerHTML = qs[parseInt(b.dataset.q)][1]();
+  });
+}
+
+function q_pendientesActuales() {
+  const map = Calc.estadoActualPorWO(Store.allRecords());
+  const rows = [...map.values()].filter(e => (e.ultimo.cantidad_pendiente || 0) > 0).map(e => e.ultimo)
+    .sort((a, b) => b.cantidad_pendiente - a.cantidad_pendiente);
+  if (!rows.length) return '<p class="muted">No hay códigos con pendiente en su última aparición registrada.</p>';
+  return tableHtml(['Código', 'Descripción', 'WO', 'Pendiente', 'Última semana', 'Puesto', 'Operario'],
+    rows.map(r => [r.codigo, r.descripcion, r.wo, r.cantidad_pendiente, r.semana + ' (' + r.anio + ')', r.puesto, r.operario]));
+}
+function q_pendientesRecurrentes() {
+  const map = Calc.estadoActualPorWO(Store.allRecords());
+  const rows = [...map.entries()].filter(([k, e]) => {
+    const semanasComoPendiente = new Set(e.historial.filter(h => (h.cantidad_pendiente || 0) > 0).map(h => h.anio + h.semana));
+    return semanasComoPendiente.size > 1;
+  }).map(([k, e]) => {
+    const semanas = [...new Set(e.historial.filter(h => (h.cantidad_pendiente || 0) > 0).map(h => h.semana + "'" + h.anio))];
+    return [e.ultimo.codigo, e.ultimo.descripcion, e.ultimo.wo, semanas.length, semanas.join(', '), e.ultimo.cantidad_pendiente];
+  }).sort((a, b) => b[3] - a[3]);
+  if (!rows.length) return '<p class="muted">Todavía no hay suficientes semanas guardadas para detectar recurrencia.</p>';
+  return tableHtml(['Código', 'Descripción', 'WO', 'Nº semanas pendiente', 'Semanas', 'Pendiente actual'], rows);
+}
+function q_operarioFaltantes() {
+  const g = Calc.groupBy(Store.allRecords(), r => r.operario).sort((a, b) => b.pendiente - a.pendiente);
+  return tableHtml(['Operario', 'Piezas pendientes (acumulado histórico)', 'Trabajos con pendiente', 'Cumplimiento'],
+    g.map(x => [x.key, x.pendiente, x.pendientesN, x.cumplimiento.toFixed(1) + '%']));
+}
+function q_puestoIncumplimientos() {
+  const g = Calc.groupBy(Store.allRecords(), r => r.puesto).sort((a, b) => b.pendientesN - a.pendientesN);
+  return tableHtml(['Puesto', 'Trabajos con pendiente/parcial', 'Piezas pendientes', 'Cumplimiento'],
+    g.map(x => [x.key, x.pendientesN, x.pendiente, x.cumplimiento.toFixed(1) + '%']));
+}
+function q_diaMenorCumplimiento() {
+  const diaOrder = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+  const g = Calc.groupBy(Store.allRecords(), r => r.dia).sort((a, b) => diaOrder.indexOf(a.key) - diaOrder.indexOf(b.key));
+  return tableHtml(['Día', 'Cumplimiento', 'Planificada', 'Realizada'], g.map(x => [x.key, x.cumplimiento.toFixed(1) + '%', x.planificada, x.realizada]));
+}
+function q_semanaMenorCumplimiento() {
+  const data = Store.load();
+  const rows = data.semanas.map(w => { const r = Calc.resumenSemana(w.records); return [w.semana, w.anio, r.cumplimiento.toFixed(1) + '%', r.piezasPendientes]; })
+    .sort((a, b) => parseFloat(a[2]) - parseFloat(b[2]));
+  return tableHtml(['Semana', 'Año', 'Cumplimiento', 'Piezas pendientes'], rows);
+}
+function tableHtml(headers, rows) {
+  return `<div class="table-wrap" style="margin-top:10px;"><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(String(c ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ---------------------- UI: Búsqueda ---------------------- */
+document.getElementById('btnSearch').addEventListener('click', doSearch);
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+function doSearch() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const box = document.getElementById('searchResults');
+  if (!q) { box.innerHTML = ''; return; }
+  const all = Store.allRecords();
+  const found = all.filter(r => [r.codigo, r.wo, r.operario, r.puesto, r.descripcion].join(' ').toLowerCase().includes(q));
+  if (!found.length) { box.innerHTML = '<p class="muted">Sin resultados en el histórico guardado.</p>'; return; }
+
+  const porCodigo = new Map();
+  found.forEach(r => { if (!porCodigo.has(r.codigo)) porCodigo.set(r.codigo, []); porCodigo.get(r.codigo).push(r); });
+
+  let html = `<p class="muted">${found.length} coincidencia(s) en ${porCodigo.size} código(s).</p>`;
+  for (const [codigo, recs] of porCodigo) {
+    const semanas = [...new Set(recs.map(r => r.semana + "'" + r.anio))];
+    const puestos = [...new Set(recs.map(r => r.puesto))];
+    const operarios = [...new Set(recs.map(r => r.operario))];
+    const totalPlan = recs.reduce((s, r) => s + (r.cantidad_planificada || 0), 0);
+    const totalReal = recs.reduce((s, r) => s + (r.cantidad_realizada || 0), 0);
+    const totalPend = recs.reduce((s, r) => s + (r.cantidad_pendiente || 0), 0);
+    html += `<div class="detail-card">
+      <b>${codigo}</b> — ${escapeHtml(recs[0].descripcion)}
+      <div style="margin:6px 0;">${semanas.map(s => `<span class="pill">${s}</span>`).join('')}</div>
+      <div class="muted">Puestos: ${puestos.join(', ')} · Operarios: ${operarios.join(', ')}</div>
+      <div class="muted">Planificado total: ${totalPlan} · Realizado: ${totalReal} · Pendiente: ${totalPend}</div>
+      ${tableHtml(['Semana', 'Día', 'WO', 'Puesto', 'Operario', 'Plan.', 'Real.', 'Pend.', 'Estado'],
+        recs.sort((a, b) => weekSortKey(a) - weekSortKey(b)).map(r => [r.semana + "'" + r.anio, r.dia, r.wo, r.puesto, r.operario, r.cantidad_planificada, r.cantidad_realizada, r.cantidad_pendiente, r.estado]))}
+    </div>`;
+  }
+  box.innerHTML = html;
+}
+
+/* ---------------------- UI: Configuración ---------------------- */
+function renderConfigView() {
+  const legendNames = { terminado: 'Conjunto terminado', no_realizado: 'Conjunto no realizado', parcial: 'Conjunto realizado parcialmente', en_proceso: 'Conjunto en proceso' };
+  const box = document.getElementById('legendEditor');
+  box.innerHTML = Object.keys(legendNames).map(k => {
+    const argb = App.config.legend[k];
+    const hex = '#' + argb.slice(2);
+    return `<div class="legend-row"><div class="swatch" style="background:${hex}"></div><label>${legendNames[k]}</label>
+      <input type="color" data-legend="${k}" value="${hex}"><span class="muted">${argb}</span></div>`;
+  }).join('');
+  document.getElementById('chkUncoloredPending').checked = App.config.treatUncoloredAsPending;
+}
+document.getElementById('btnSaveConfig').addEventListener('click', () => {
+  document.querySelectorAll('[data-legend]').forEach(inp => {
+    const hex = inp.value.replace('#', '').toUpperCase();
+    App.config.legend[inp.dataset.legend] = 'FF' + hex;
+  });
+  App.config.treatUncoloredAsPending = document.getElementById('chkUncoloredPending').checked;
+  Store.saveConfig(App.config);
+  alert('Configuración guardada. Se aplicará a la próxima semana que analices (las ya guardadas no se recalculan automáticamente).');
+  renderConfigView();
+});
+document.getElementById('btnBackup').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(Store.load(), null, 2)], { type: 'application/json' });
+  downloadBlob(blob, 'backup_historico_soldadura_' + todayStr() + '.json');
+});
+document.getElementById('btnRestore').addEventListener('click', () => document.getElementById('restoreInput').click());
+document.getElementById('restoreInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const json = JSON.parse(await file.text());
+    if (!json.semanas) throw new Error('Formato inválido');
+    Store.save(json);
+    alert('Histórico restaurado correctamente.');
+    renderHistoricoView();
+  } catch (err) { alert('No se pudo restaurar: ' + err.message); }
+});
+document.getElementById('btnClearAll').addEventListener('click', () => {
+  if (confirm('Esto borra TODO el histórico guardado en esta PC. ¿Continuar?')) { Store.save({ semanas: [] }); renderDashboard(); renderHistoricoView(); }
+});
+
+/* ---------------------- 7. EXPORTACIÓN ---------------------- */
+async function doExport(type) {
+  const wb = new ExcelJS.Workbook();
+  const data = Store.load();
+  const currentWeek = data.semanas.find(w => w.id === App.currentWeekId);
+  const records = currentWeek ? currentWeek.records : App.currentWeekRecords;
+  let filename = 'export.xlsx';
+
+  if (type === 'resumen') {
+    const ws = wb.addWorksheet('Resumen semanal');
+    const r = Calc.resumenSemana(records);
+    ws.addRow(['Semana', (currentWeek || {}).semana || '']);
+    ws.addRow(['Año', (currentWeek || {}).anio || '']);
+    ws.addRow([]);
+    Object.entries({
+      'Trabajos totales': r.totalTrabajos, 'Piezas planificadas': r.piezasPlanificadas, 'Piezas realizadas': r.piezasRealizadas,
+      'Piezas pendientes': r.piezasPendientes, 'Trabajos terminados': r.terminados, 'Trabajos parciales': r.parciales,
+      'Trabajos pendientes': r.pendientes, '% Cumplimiento': r.cumplimiento.toFixed(1) + '%'
+    }).forEach(([k, v]) => ws.addRow([k, v]));
+    styleHeaderCol(ws);
+    filename = `resumen_semanal_${(currentWeek || {}).semana || ''}.xlsx`;
+  } else if (type === 'pendientes') {
+    const weekId = document.getElementById('pendWeekSelect') ? document.getElementById('pendWeekSelect').value : '__ALL__';
+    const recs = (!weekId || weekId === '__ALL__') ? Store.allRecords() : (data.semanas.find(w => w.id === weekId) || { records: [] }).records;
+    addRecordsSheet(wb, 'Pendientes', recs.filter(r => (r.cantidad_pendiente || 0) > 0));
+    filename = 'pendientes.xlsx';
+  } else if (type === 'operarios') {
+    addGroupSheet(wb, 'Operarios', Calc.groupBy(records, r => r.operario), 'Operario');
+    filename = `operarios_${(currentWeek || {}).semana || ''}.xlsx`;
+  } else if (type === 'puestos') {
+    addGroupSheet(wb, 'Puestos', Calc.groupBy(records, r => r.puesto), 'Puesto');
+    filename = `puestos_${(currentWeek || {}).semana || ''}.xlsx`;
+  } else if (type === 'dias') {
+    addGroupSheet(wb, 'Productividad por día', Calc.groupBy(records, r => r.dia), 'Día');
+    filename = `productividad_dias_${(currentWeek || {}).semana || ''}.xlsx`;
+  } else if (type === 'datos') {
+    addRecordsSheet(wb, 'Datos normalizados', records);
+    filename = `datos_normalizados_${(currentWeek || {}).semana || ''}.xlsx`;
+  } else if (type === 'historico') {
+    addRecordsSheet(wb, 'Histórico completo', Store.allRecords());
+    const resumenWs = wb.addWorksheet('Resumen por semana');
+    resumenWs.addRow(['Semana', 'Año', 'Trabajos', '% Cumplimiento', 'Piezas pendientes']);
+    data.semanas.slice().sort((a, b) => weekSortKey(a) - weekSortKey(b)).forEach(w => {
+      const r = Calc.resumenSemana(w.records);
+      resumenWs.addRow([w.semana, w.anio, w.records.length, +r.cumplimiento.toFixed(1), r.piezasPendientes]);
+    });
+    styleHeaderRow(resumenWs);
+    filename = 'historico_completo.xlsx';
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/octet-stream' }), filename);
+}
+function addRecordsSheet(wb, name, records) {
+  const ws = wb.addWorksheet(name);
+  ws.addRow(['Semana', 'Año', 'Día', 'Turno', 'Puesto', 'Operario', 'Código', 'WO', 'Descripción', 'Cant. planificada', 'Cant. realizada', 'Cant. pendiente', 'Estado', 'Hoja origen', 'Celda']);
+  records.forEach(r => ws.addRow([r.semana, r.anio, r.dia, r.turno, r.puesto, r.operario, r.codigo, r.wo, r.descripcion, r.cantidad_planificada, r.cantidad_realizada, r.cantidad_pendiente, r.estado, r.hoja, r.celda]));
+  styleHeaderRow(ws);
+}
+function addGroupSheet(wb, name, groups, labelName) {
+  const ws = wb.addWorksheet(name);
+  ws.addRow([labelName, 'Trabajos', 'Planificada', 'Realizada', 'Pendiente', 'Terminados', '% Cumplimiento']);
+  groups.forEach(g => ws.addRow([g.key, g.trabajos, g.planificada, g.realizada, g.pendiente, g.terminados, +g.cumplimiento.toFixed(1)]));
+  styleHeaderRow(ws);
+}
+function styleHeaderRow(ws) { ws.getRow(1).font = { bold: true }; ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2F4' } }; ws.columns.forEach(c => c.width = 18); }
+function styleHeaderCol(ws) { ws.getColumn(1).font = { bold: true }; ws.columns.forEach(c => c.width = 26); }
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+/* ---------------------- Inicio ---------------------- */
+renderDashboard();
+</script>
+</body>
+</html>
