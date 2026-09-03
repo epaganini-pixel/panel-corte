@@ -4,8 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seguimiento de Producción — SOLDADURA</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script>
+// Carga de librerías con reintento en un segundo CDN por si el primero falla
+// (bloqueo de red corporativo, adblock, URL caída, etc.) en vez de fallar en silencio.
+function loadScriptWithFallback(urls, globalName, onDone) {
+  let i = 0;
+  function tryNext() {
+    if (i >= urls.length) { onDone(false); return; }
+    const url = urls[i++];
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = () => {
+      if (window[globalName]) onDone(true); else tryNext();
+    };
+    s.onerror = tryNext;
+    document.head.appendChild(s);
+  }
+  tryNext();
+}
+window.__libsReady = new Promise(resolve => {
+  let excelOk = false, chartOk = false;
+  const check = () => { if (excelOk !== null && chartOk !== null) resolve({ excelOk, chartOk }); };
+  loadScriptWithFallback([
+    'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
+    'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
+  ], 'ExcelJS', ok => { excelOk = ok; check(); });
+  loadScriptWithFallback([
+    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'
+  ], 'Chart', ok => { chartOk = ok; check(); });
+});
+</script>
 <style>
 :root{
   --bg:#f1f3f5; --panel:#ffffff; --border:#d6dbe0; --text:#1f2933; --muted:#5b6b79;
@@ -90,6 +119,7 @@ table tr:hover td{background:#f7fafb;}
   </div>
   <div class="sub">Aplicación local · el Excel original no se modifica · <span id="appVersion"></span></div>
 </header>
+<div id="libsBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
 
 <nav class="tabs" id="tabs">
   <button data-view="cargar" class="active">Cargar Excel</button>
@@ -682,8 +712,15 @@ function nextPaint() { return new Promise(r => setTimeout(r, 20)); }
 async function handleFile(file) {
   const statusEl = document.getElementById('loadStatus');
   statusEl.className = 'status-line';
-  statusEl.textContent = 'Leyendo archivo...';
+  statusEl.textContent = 'Cargando librería de lectura de Excel...';
   document.getElementById('detectedPanel').style.display = 'none';
+  await nextPaint();
+  const { excelOk } = await window.__libsReady;
+  if (!excelOk || typeof ExcelJS === 'undefined') {
+    statusEl.textContent = 'No se pudo cargar la librería para leer Excel (ExcelJS). Revisá tu conexión a internet y volvé a intentar.';
+    return;
+  }
+  statusEl.textContent = 'Leyendo archivo...';
   await nextPaint();
   try {
     App.workbook = await ExcelReader.loadWorkbook(file);
@@ -871,6 +908,18 @@ function renderGroupTable(tableId, groups, labelName) {
 }
 
 function renderCharts(records) {
+  if (typeof Chart === 'undefined') {
+    document.querySelectorAll('.chart-box canvas').forEach(c => {
+      const p = c.parentElement;
+      if (!p.querySelector('.chart-error')) {
+        const msg = document.createElement('p');
+        msg.className = 'muted chart-error';
+        msg.textContent = 'No se pudo cargar la librería de gráficos (Chart.js). Los datos siguen disponibles en las tablas de abajo.';
+        p.appendChild(msg);
+      }
+    });
+    return;
+  }
   const diaOrder = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
   const byDia = Calc.groupBy(records, x => x.dia).sort((a, b) => diaOrder.indexOf(a.key) - diaOrder.indexOf(b.key));
   drawBar('chartDia', byDia.map(g => g.key), [{ label: '% Cumplimiento', data: byDia.map(g => +g.cumplimiento.toFixed(1)), color: '#1b4965' }]);
@@ -1184,8 +1233,22 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v4 · rango de filas siempre acotado (sin loops sin fin) · errores visibles en pantalla';
+const APP_VERSION = 'v5 · CDN de gráficos corregido + respaldo automático de CDN';
 document.getElementById('appVersion').textContent = APP_VERSION;
+
+const libsBanner = document.getElementById('libsBanner');
+libsBanner.style.display = 'block';
+libsBanner.textContent = 'Cargando librerías necesarias (ExcelJS, Chart.js)...';
+window.__libsReady.then(({ excelOk, chartOk }) => {
+  if (excelOk && chartOk) {
+    libsBanner.style.display = 'none';
+  } else {
+    const faltantes = [!excelOk && 'ExcelJS (lectura de Excel)', !chartOk && 'Chart.js (gráficos)'].filter(Boolean).join(' y ');
+    libsBanner.innerHTML = `No se pudo cargar: <b>${faltantes}</b>. Revisá la conexión a internet de esta PC (la app necesita descargarlas la primera vez) o pedile a IT que habilite el acceso a <code>cdnjs.cloudflare.com</code> y <code>cdn.jsdelivr.net</code>.` +
+      (excelOk ? ' Podés seguir usando la carga y el análisis; sólo los gráficos no van a aparecer.' : ' Sin esta librería no se puede leer el Excel.');
+  }
+});
+
 renderDashboard();
 </script>
 </body>
