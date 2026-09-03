@@ -130,6 +130,13 @@ table tr:hover td{background:#f7fafb;}
       <span class="muted" id="analyzeHint">Tildá una o más semanas de la lista para procesarlas y guardarlas en el histórico.</span>
     </div>
   </div>
+
+  <div class="panel" id="histImportPanel" style="display:none;">
+    <h2>Hojas de HISTÓRICO encontradas</h2>
+    <p class="muted">El archivo tiene hojas de histórico con muchas semanas acumuladas. No se escanean automáticamente porque puede tardar. Si querés importar semanas pasadas al histórico de la app, hacelo acá (puede tardar algunos segundos por hoja).</p>
+    <div class="export-row"><button class="btn secondary" id="btnImportHistoricas">Escanear e importar hojas de HISTÓRICO</button></div>
+    <div id="histImportStatus" class="status-line"></div>
+  </div>
 </section>
 
 <!-- ============ VISTA: DASHBOARD ============ -->
@@ -454,9 +461,16 @@ function matchLegendColor(argb, legend) {
   return null;
 }
 
+/** Índice fila_columna -> celda para evitar búsquedas lineales sobre hojas grandes (O(1) en vez de O(n)). */
+function buildCellIndex(cells) {
+  const map = new Map();
+  for (const c of cells) map.set(c.row + '_' + c.col, c);
+  return map;
+}
+
 /* -------- Orquestador: convierte una hoja completa en registros -------- */
-function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fallbackYear) {
-  const cells = ExcelReader.sheetToCells(ws);
+function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fallbackYear, cellsCache) {
+  const cells = cellsCache || ExcelReader.sheetToCells(ws);
   const weekBlocks = GridParser.findWeekBlocks(cells);
   const records = [];
   const revisar = [];
@@ -465,8 +479,11 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
   const yearFromSheet = (sheetName.match(/\b(20\d{2})\b/) || [])[1];
 
   for (const wb of weekBlocks) {
-    const puestoBlocks = GridParser.findPuestoBlocks(cells, wb.rowStart, wb.rowEnd);
-    const dayCols = GridParser.findDayColumns(cells, wb.rowStart, wb.rowEnd);
+    // Recortar sólo las celdas de esta semana: evita re-escanear toda la hoja por cada semana en hojas de HISTÓRICO grandes.
+    const weekCells = cells.filter(c => c.row >= wb.rowStart && (wb.rowEnd === Infinity || c.row <= wb.rowEnd));
+    const weekIndex = buildCellIndex(weekCells);
+    const puestoBlocks = GridParser.findPuestoBlocks(weekCells, wb.rowStart, wb.rowEnd);
+    const dayCols = GridParser.findDayColumns(weekCells, wb.rowStart, wb.rowEnd);
     const dayColNums = Object.keys(dayCols).map(Number).sort((a, b) => a - b);
     let anio = yearFromSheet ? parseInt(yearFromSheet) : fallbackYear;
 
@@ -476,7 +493,7 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
       const pending = {};
       for (let r = pb.dataStart; r <= pb.dataEnd; r++) {
         for (const col of dayColNums) {
-          const cell = cells.find(c => c.row === r && c.col === col);
+          const cell = weekIndex.get(r + '_' + col);
           if (!cell) continue;
           if (r === pb.dataStart) continue; // fila inmediatamente bajo el encabezado = notas de insumos
           if (DIAS_HEADER.includes(cell.value.toUpperCase())) continue;
@@ -620,6 +637,8 @@ const App = {
   workbook: null,
   fileName: null,
   detectedWeeks: [], // {id, semana, anio, hoja, ws, meta}
+  sheetsHistoricasPendientes: [],
+  cellsCache: new Map(),
   currentWeekRecords: [],
   currentWeekRevisar: [],
   currentWeekId: null,
@@ -651,32 +670,50 @@ fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(
 dropzone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
 dropzone.addEventListener('click', () => fileInput.click());
 
+// Las hojas de HISTÓRICO acumulan decenas de semanas en miles de filas: no se escanean
+// automáticamente al cargar (sería muy lento), sólo las hojas "actuales" (una semana por hoja).
+function isHojaHistorica(name) { return /HIST[OÓ]RICO/i.test(name); }
+
+// pequeña pausa para que el navegador pinte el mensaje de estado antes de bloquear el hilo con el parseo
+function nextPaint() { return new Promise(r => setTimeout(r, 20)); }
+
 async function handleFile(file) {
   const statusEl = document.getElementById('loadStatus');
+  statusEl.className = 'status-line';
   statusEl.textContent = 'Leyendo archivo...';
+  document.getElementById('detectedPanel').style.display = 'none';
+  await nextPaint();
   try {
     App.workbook = await ExcelReader.loadWorkbook(file);
     App.fileName = file.name;
     App.detectedWeeks = [];
+    App.sheetsHistoricasPendientes = [];
+    App.cellsCache = new Map(); // hoja -> celdas ya extraídas, para no re-escanear
     const currentYear = new Date().getFullYear();
 
-    App.workbook.eachSheet(ws => {
-      if (ws.state === 'hidden' || ws.state === 'veryHidden') return; // se respetan hojas ocultas del planificador
+    statusEl.textContent = 'Detectando semanas...';
+    await nextPaint();
+
+    for (const ws of App.workbook.worksheets) {
+      if (ws.state === 'hidden' || ws.state === 'veryHidden') continue; // se respetan hojas ocultas del planificador
+      if (isHojaHistorica(ws.name)) { App.sheetsHistoricasPendientes.push(ws); continue; } // se procesan sólo si el usuario lo pide (ver abajo)
       const cells = ExcelReader.sheetToCells(ws);
+      App.cellsCache.set(ws.name, cells);
       const blocks = GridParser.findWeekBlocks(cells);
       for (const b of blocks) {
         const yearMatch = ws.name.match(/\b(20\d{2})\b/);
         const anio = yearMatch ? parseInt(yearMatch[1]) : currentYear;
         App.detectedWeeks.push({ id: anio + '-' + b.semanaLabel, semana: b.semanaLabel, anio, hoja: ws.name, ws, rowStart: b.rowStart, rowEnd: b.rowEnd });
       }
-    });
+      await nextPaint();
+    }
 
-    if (App.detectedWeeks.length === 0) {
+    if (App.detectedWeeks.length === 0 && App.sheetsHistoricasPendientes.length === 0) {
       statusEl.textContent = 'No se detectó ninguna semana (celda tipo "W35") en el archivo. Verificá que sea el Excel de seguimiento.';
-      statusEl.className = 'status-line';
       return;
     }
-    statusEl.textContent = `Archivo "${file.name}" cargado. ${App.detectedWeeks.length} semana(s) detectada(s).`;
+    statusEl.textContent = `Archivo "${file.name}" cargado. ${App.detectedWeeks.length} semana(s) lista(s) para analizar` +
+      (App.sheetsHistoricasPendientes.length ? ` · ${App.sheetsHistoricasPendientes.length} hoja(s) de HISTÓRICO sin escanear (ver abajo).` : '.');
     statusEl.className = 'status-line ok';
     renderDetectedWeeks();
   } catch (err) {
@@ -691,35 +728,70 @@ function renderDetectedWeeks() {
   document.getElementById('detectedInfo').textContent =
     App.detectedWeeks.length === 1
       ? `Semana detectada: ${App.detectedWeeks[0].semana}`
-      : `Se detectaron ${App.detectedWeeks.length} semanas (por ejemplo si cargaste una hoja histórica completa).`;
+      : (App.detectedWeeks.length > 1 ? `Se detectaron ${App.detectedWeeks.length} semanas.` : 'No hay semanas actuales detectadas.');
   const tbody = document.getElementById('weekListBody');
   tbody.innerHTML = '';
   App.detectedWeeks.forEach((w, i) => {
-    // vista previa liviana para contar puestos/trabajos aproximados
-    const cells = ExcelReader.sheetToCells(w.ws);
-    const puestos = GridParser.findPuestoBlocks(cells, w.rowStart, w.rowEnd).length;
+    // vista previa liviana para contar puestos, reutilizando las celdas ya leídas (sin volver a escanear la hoja)
+    const cells = App.cellsCache.get(w.hoja) || [];
+    const puestos = GridParser.findPuestoBlocks(cells.filter(c => c.row >= w.rowStart && (w.rowEnd === Infinity || c.row <= w.rowEnd)), w.rowStart, w.rowEnd).length;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input type="checkbox" class="weekCheck" data-idx="${i}" ${App.detectedWeeks.length === 1 ? 'checked' : ''}></td>
       <td><b>${w.semana}</b></td><td>${w.anio}</td><td>${w.hoja}</td><td>${puestos}</td><td>—</td>`;
     tbody.appendChild(tr);
   });
+
+  const histPanel = document.getElementById('histImportPanel');
+  if (histPanel) histPanel.style.display = App.sheetsHistoricasPendientes.length ? 'block' : 'none';
 }
 
-document.getElementById('btnAnalyzeSelected').addEventListener('click', () => {
+document.getElementById('btnAnalyzeSelected').addEventListener('click', async () => {
   const checks = [...document.querySelectorAll('.weekCheck:checked')];
   if (checks.length === 0) { alert('Tildá al menos una semana para analizar.'); return; }
+  const btn = document.getElementById('btnAnalyzeSelected');
+  const hint = document.getElementById('analyzeHint');
+  btn.disabled = true;
   let lastId = null;
   for (const chk of checks) {
     const w = App.detectedWeeks[parseInt(chk.dataset.idx)];
-    const { records, revisar } = parseSheetToRecords(w.ws, w.hoja, App.config.legend, App.config.treatUncoloredAsPending, w.anio);
+    hint.textContent = `Procesando semana ${w.semana}...`;
+    await nextPaint();
+    const cellsCache = App.cellsCache.get(w.hoja);
+    const { records, revisar } = parseSheetToRecords(w.ws, w.hoja, App.config.legend, App.config.treatUncoloredAsPending, w.anio, cellsCache);
     const semanaRecords = records.filter(r => r.semana === w.semana);
     const entry = Store.upsertWeek(w.id, { semana: w.semana, anio: w.anio, hoja: w.hoja }, semanaRecords);
     lastId = entry.id;
     if (checks.length === 1) { App.currentWeekRevisar = revisar; }
   }
+  hint.textContent = 'Tildá una o más semanas de la lista para procesarlas y guardarlas en el histórico.';
+  btn.disabled = false;
   App.currentWeekId = lastId;
   loadCurrentWeekFromStore(lastId);
   showView('dashboard');
+});
+
+document.getElementById('btnImportHistoricas').addEventListener('click', async () => {
+  const btn = document.getElementById('btnImportHistoricas');
+  const statusEl = document.getElementById('histImportStatus');
+  btn.disabled = true;
+  let totalSemanas = 0;
+  for (const ws of App.sheetsHistoricasPendientes) {
+    statusEl.textContent = `Procesando hoja "${ws.name}"...`;
+    await nextPaint(); // deja pintar el mensaje antes de la parte pesada
+    const { records, semanasResumen } = parseSheetToRecords(ws, ws.name, App.config.legend, App.config.treatUncoloredAsPending, new Date().getFullYear());
+    for (const sr of semanasResumen) {
+      const weekRecords = records.filter(r => r.semana === sr.semana && r.anio === sr.anio);
+      if (!weekRecords.length) continue;
+      const id = sr.anio + '-' + sr.semana;
+      Store.upsertWeek(id, { semana: sr.semana, anio: sr.anio, hoja: ws.name }, weekRecords);
+      totalSemanas++;
+    }
+    await nextPaint();
+  }
+  statusEl.textContent = `Listo: se importaron ${totalSemanas} semana(s) desde las hojas de histórico al histórico de la app.`;
+  statusEl.className = 'status-line ok';
+  btn.disabled = false;
+  renderDashboard();
 });
 
 function loadCurrentWeekFromStore(weekId) {
