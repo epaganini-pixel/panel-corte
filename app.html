@@ -88,7 +88,7 @@ table tr:hover td{background:#f7fafb;}
     <h1>Seguimiento de Producción — SOLDADURA</h1>
     <div class="sub" id="hdrSub">Sin datos cargados</div>
   </div>
-  <div class="sub">Aplicación local · el Excel original no se modifica</div>
+  <div class="sub">Aplicación local · el Excel original no se modifica · <span id="appVersion"></span></div>
 </header>
 
 <nav class="tabs" id="tabs">
@@ -324,11 +324,13 @@ const GridParser = {
   /** Detecta bloques de semana dentro de una hoja: busca en la columna A
    *  celdas que matcheen "W35", "W 35", "S-03" (algunas hojas viejas), etc. */
   findWeekBlocks(cells) {
+    const maxRow = cells.reduce((m, c) => Math.max(m, c.row), 0);
     const weekCells = cells.filter(c => c.col === 1 && /^W\s?\d{1,2}$/i.test(c.value));
     const blocks = [];
     for (let i = 0; i < weekCells.length; i++) {
       const start = weekCells[i].row;
-      const end = (i + 1 < weekCells.length) ? weekCells[i + 1].row - 1 : Infinity;
+      // nunca dejar el rango abierto (Infinity): la última semana de la hoja termina en la última fila con datos
+      const end = (i + 1 < weekCells.length) ? weekCells[i + 1].row - 1 : maxRow;
       const label = weekCells[i].value.replace(/\s+/g, '').toUpperCase();
       blocks.push({ semanaLabel: label, rowStart: start, rowEnd: end });
     }
@@ -480,7 +482,7 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
 
   for (const wb of weekBlocks) {
     // Recortar sólo las celdas de esta semana: evita re-escanear toda la hoja por cada semana en hojas de HISTÓRICO grandes.
-    const weekCells = cells.filter(c => c.row >= wb.rowStart && (wb.rowEnd === Infinity || c.row <= wb.rowEnd));
+    const weekCells = cells.filter(c => c.row >= wb.rowStart && c.row <= wb.rowEnd);
     const weekIndex = buildCellIndex(weekCells);
     const puestoBlocks = GridParser.findPuestoBlocks(weekCells, wb.rowStart, wb.rowEnd);
     const dayCols = GridParser.findDayColumns(weekCells, wb.rowStart, wb.rowEnd);
@@ -528,7 +530,7 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
         }
       }
     }
-    semanasResumen.push({ semana: wb.semanaLabel, anio, hoja: sheetName, puestos: puestoBlocks.length, trabajos: countJobs, rowStart: wb.rowStart, rowEnd: wb.rowEnd === Infinity ? null : wb.rowEnd });
+    semanasResumen.push({ semana: wb.semanaLabel, anio, hoja: sheetName, puestos: puestoBlocks.length, trabajos: countJobs, rowStart: wb.rowStart, rowEnd: wb.rowEnd });
   }
   return { records, revisar, semanasResumen };
 }
@@ -734,7 +736,7 @@ function renderDetectedWeeks() {
   App.detectedWeeks.forEach((w, i) => {
     // vista previa liviana para contar puestos, reutilizando las celdas ya leídas (sin volver a escanear la hoja)
     const cells = App.cellsCache.get(w.hoja) || [];
-    const puestos = GridParser.findPuestoBlocks(cells.filter(c => c.row >= w.rowStart && (w.rowEnd === Infinity || c.row <= w.rowEnd)), w.rowStart, w.rowEnd).length;
+    const puestos = GridParser.findPuestoBlocks(cells.filter(c => c.row >= w.rowStart && c.row <= w.rowEnd), w.rowStart, w.rowEnd).length;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input type="checkbox" class="weekCheck" data-idx="${i}" ${App.detectedWeeks.length === 1 ? 'checked' : ''}></td>
       <td><b>${w.semana}</b></td><td>${w.anio}</td><td>${w.hoja}</td><td>${puestos}</td><td>—</td>`;
@@ -752,22 +754,34 @@ document.getElementById('btnAnalyzeSelected').addEventListener('click', async ()
   const hint = document.getElementById('analyzeHint');
   btn.disabled = true;
   let lastId = null;
-  for (const chk of checks) {
-    const w = App.detectedWeeks[parseInt(chk.dataset.idx)];
-    hint.textContent = `Procesando semana ${w.semana}...`;
-    await nextPaint();
-    const cellsCache = App.cellsCache.get(w.hoja);
-    const { records, revisar } = parseSheetToRecords(w.ws, w.hoja, App.config.legend, App.config.treatUncoloredAsPending, w.anio, cellsCache);
-    const semanaRecords = records.filter(r => r.semana === w.semana);
-    const entry = Store.upsertWeek(w.id, { semana: w.semana, anio: w.anio, hoja: w.hoja }, semanaRecords);
-    lastId = entry.id;
-    if (checks.length === 1) { App.currentWeekRevisar = revisar; }
+  try {
+    for (const chk of checks) {
+      const w = App.detectedWeeks[parseInt(chk.dataset.idx)];
+      if (!w) throw new Error('No se encontró la semana seleccionada (índice ' + chk.dataset.idx + ').');
+      hint.textContent = `Procesando semana ${w.semana}... (leyendo celdas)`;
+      await nextPaint();
+      // Si por algún motivo no está en caché, se recalcula acá (no debería pasar, pero no debe colgar la página).
+      const cellsCache = App.cellsCache.get(w.hoja) || ExcelReader.sheetToCells(w.ws);
+      hint.textContent = `Procesando semana ${w.semana}... (interpretando ${cellsCache.length} celdas)`;
+      await nextPaint();
+      const { records, revisar } = parseSheetToRecords(w.ws, w.hoja, App.config.legend, App.config.treatUncoloredAsPending, w.anio, cellsCache);
+      hint.textContent = `Procesando semana ${w.semana}... (guardando ${records.length} registros)`;
+      await nextPaint();
+      const semanaRecords = records.filter(r => r.semana === w.semana);
+      const entry = Store.upsertWeek(w.id, { semana: w.semana, anio: w.anio, hoja: w.hoja }, semanaRecords);
+      lastId = entry.id;
+      if (checks.length === 1) { App.currentWeekRevisar = revisar; }
+    }
+    hint.textContent = 'Tildá una o más semanas de la lista para procesarlas y guardarlas en el histórico.';
+    App.currentWeekId = lastId;
+    loadCurrentWeekFromStore(lastId);
+    showView('dashboard');
+  } catch (err) {
+    console.error('Error al analizar la semana:', err);
+    hint.innerHTML = `<span style="color:var(--bad);">Error al analizar: ${escapeHtml(err.message)}. Revisá la consola del navegador (F12) para más detalle.</span>`;
+  } finally {
+    btn.disabled = false;
   }
-  hint.textContent = 'Tildá una o más semanas de la lista para procesarlas y guardarlas en el histórico.';
-  btn.disabled = false;
-  App.currentWeekId = lastId;
-  loadCurrentWeekFromStore(lastId);
-  showView('dashboard');
 });
 
 document.getElementById('btnImportHistoricas').addEventListener('click', async () => {
@@ -1170,6 +1184,8 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
+const APP_VERSION = 'v4 · rango de filas siempre acotado (sin loops sin fin) · errores visibles en pantalla';
+document.getElementById('appVersion').textContent = APP_VERSION;
 renderDashboard();
 </script>
 </body>
