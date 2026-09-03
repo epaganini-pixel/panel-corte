@@ -5,284 +5,305 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Puesto de Mecanizado — Torno</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
-
-  :root{
-    --bg:#f6f4ef;
-    --panel:#ffffff;
-    --panel-alt:#fbfaf7;
-    --border:#e5e1d8;
-    --border-soft:#ece9e0;
-    --text:#2c2a26;
-    --text-muted:#948e80;
-    --brand:#ffaf0f;
-    --brand-dark:#c98700;
-    --run:#5678a3;
-    --pause:#cf9b3d;
-    --done:#6ea675;
-    --danger:#c4564f;
-    --shadow: 0 1px 2px rgba(40,35,25,0.04), 0 4px 14px rgba(40,35,25,0.05);
-  }
-
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;padding:24px;}
-  .mono{font-family:'IBM Plex Mono',monospace;}
-  .wrap{max-width:820px;margin:0 auto;}
-
-  .role-banner{background:#eef3f0;border:1px solid #d7e4dd;color:#3f6b5c;padding:9px 14px;border-radius:8px;font-size:12.5px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
-
-  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding-bottom:20px;margin-bottom:22px;border-bottom:2px solid var(--brand);}
-  .header-brand{display:flex;align-items:center;gap:12px;}
-  .logo-badge{width:42px;height:42px;border-radius:10px;overflow:hidden;flex-shrink:0;box-shadow:var(--shadow);}
-  .logo-badge img{width:100%;height:100%;display:block;object-fit:cover;}
-  .title-block h1{font-size:24px;margin:0;color:var(--text);font-weight:700;letter-spacing:-0.01em;}
-  .title-block .sub{color:var(--text-muted);font-size:13px;margin-top:5px;}
-
-  .stats{display:flex;gap:10px;flex-wrap:wrap;}
-  .stat{background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);padding:9px 16px;min-width:64px;text-align:center;}
-  .stat .n{font-size:19px;font-weight:700;}
-  .stat .l{font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-top:2px;}
-  .stat.run .n{color:var(--run);}
-  .stat.done .n{color:var(--done);}
-
-  .toolbar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
-  button{font-family:'Inter';cursor:pointer;border:none;border-radius:7px;font-weight:600;font-size:13px;}
-  .btn-primary{background:var(--brand);color:#241a00;padding:10px 18px;display:flex;align-items:center;gap:8px;}
-  .btn-primary:hover{background:var(--brand-dark);}
-  .btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border);padding:10px 16px;}
-  .btn-secondary:hover{border-color:var(--text-muted);}
-  .btn-ghost{background:transparent;color:var(--text-muted);padding:6px 10px;font-size:11.5px;text-decoration:underline;}
-  .btn-ghost:hover{color:var(--text);}
-
-  h2.section-title{font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:26px 0 10px;font-weight:600;}
-  h2.section-title:first-of-type{margin-top:0;}
-
-  .piece-list{display:flex;flex-direction:column;gap:8px;}
-  .empty-msg{color:var(--text-muted);font-size:12.5px;text-align:center;padding:24px 8px;border:1px dashed var(--border);border-radius:8px;}
-
-  .piece-card{background:var(--panel);border:1px solid var(--border-soft);border-left:4px solid transparent;border-radius:10px;box-shadow:var(--shadow);overflow:hidden;}
-  .color-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;vertical-align:middle;margin-bottom:2px;}
-  .color-picker{display:flex;gap:9px;flex-wrap:wrap;align-items:center;}
-  .color-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-  .color-swatch.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--panel);}
-  .color-swatch.none{background:var(--panel-alt);border:1px dashed var(--border);color:var(--text-muted);font-size:14px;}
-  .color-swatch.none.selected{border-color:var(--text);border-style:solid;}
-  .piece-card.running{border-color:var(--run);}
-  .piece-card.paused{border-color:var(--pause);}
-  .piece-row{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;}
-  .drag-handle{color:var(--text-muted);font-size:15px;cursor:grab;padding:2px 4px;flex-shrink:0;}
-  .piece-icon{width:38px;height:38px;border-radius:6px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;background:var(--panel-alt);}
-  .piece-icon-empty{width:38px;height:38px;border-radius:6px;border:1px dashed var(--border-soft);flex-shrink:0;}
-  .piece-info{flex:1;min-width:0;}
-  .piece-name{font-size:14px;font-weight:600;word-break:break-word;}
-  .piece-meta{font-size:11.5px;color:var(--text-muted);margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
-  .status-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:9px;font-size:10.5px;font-weight:600;}
-  .status-chip.pendiente{background:var(--panel-alt);color:var(--text-muted);border:1px solid var(--border-soft);}
-  .status-chip.en_progreso{background:#e8eef6;color:var(--run);}
-  .status-chip.pausado{background:#faf1de;color:var(--pause);}
-  .status-chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
-  .chevron{color:var(--text-muted);font-size:12px;flex-shrink:0;transition:transform 0.15s;}
-  .piece-card.expanded .chevron{transform:rotate(90deg);}
-
-  .piece-expand{display:none;padding:0 14px 14px;border-top:1px solid var(--border-soft);}
-  .piece-card.expanded .piece-expand{display:block;}
-  .timer-display{font-family:'IBM Plex Mono',monospace;font-size:32px;font-weight:700;text-align:center;padding:14px 0 6px;color:var(--text);}
-  .timer-label{text-align:center;font-size:11px;color:var(--text-muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.05em;}
-  .action-row{display:flex;gap:8px;margin-bottom:10px;}
-  .action-row button{flex:1;padding:11px;display:flex;align-items:center;justify-content:center;gap:6px;}
-  .btn-start{background:var(--run);color:#fff;}
-  .btn-start:hover{background:#476892;}
-  .btn-pause{background:var(--pause);color:#fff;}
-  .btn-pause:hover{background:#b5872f;}
-  .btn-finish{background:var(--done);color:#173720;}
-  .btn-finish:hover{background:#5c9264;}
-  .btn-pdf{background:var(--panel-alt);color:var(--text);border:1px solid var(--border-soft);width:100%;padding:11px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;}
-  .btn-pdf:hover{border-color:var(--text-muted);}
-  .expand-footer{display:flex;justify-content:space-between;gap:8px;margin-top:6px;}
-
-  .comments-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-soft);}
-  .comments-section h4{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 10px;font-weight:600;}
-  .comment-row{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:var(--panel-alt);border-radius:7px;margin-bottom:6px;}
-  .comment-row .c-body{flex:1;min-width:0;}
-  .comment-row .c-text{font-size:12.5px;color:var(--text);line-height:1.4;word-break:break-word;}
-  .comment-row .c-meta{font-size:10px;color:var(--text-muted);margin-top:3px;}
-  .comment-row .c-del{background:none;color:var(--text-muted);font-size:11px;width:18px;height:18px;flex-shrink:0;}
-  .comment-row .c-del:hover{color:var(--danger);}
-  .comment-empty{font-size:11.5px;color:var(--text-muted);margin-bottom:8px;}
-  .comment-input-row{display:flex;gap:8px;margin-top:4px;}
-  .comment-input-row input{flex:1;background:var(--panel-alt);border:1px solid var(--border-soft);border-radius:7px;padding:8px 10px;font-size:12.5px;font-family:'Inter';color:var(--text);}
-  .comment-input-row button{padding:8px 14px;background:var(--brand);color:#241a00;flex-shrink:0;}
-  .comment-input-row button:hover{background:var(--brand-dark);}
-
-  .finished-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);}
-  .finished-row .f-icon{width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;background:var(--panel-alt);}
-  .finished-row .f-icon-empty{width:34px;height:34px;border-radius:6px;border:1px dashed var(--border-soft);flex-shrink:0;}
-  .finished-row .f-info{flex:1;min-width:0;}
-  .finished-row .f-name{font-size:13.5px;font-weight:600;}
-  .finished-row .f-meta{font-size:11px;color:var(--text-muted);margin-top:2px;}
-  .finished-row .f-time{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--done);flex-shrink:0;text-align:right;}
-  .finished-row .f-time .f-date{display:block;font-family:'Inter';font-weight:500;font-size:10px;color:var(--text-muted);margin-top:2px;}
-
-  .overlay{position:fixed;inset:0;background:rgba(44,42,38,0.35);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
-  .overlay.open{display:flex;}
-  .modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 12px 40px rgba(40,35,25,0.18);position:relative;}
-  .modal h2{font-size:17px;margin:0 0 4px;font-weight:700;}
-  .modal .modal-sub{font-size:12px;color:var(--text-muted);margin-bottom:18px;}
-  .modal.confirm-modal{max-width:360px;text-align:center;}
-  .modal.confirm-modal p{font-size:14px;line-height:1.5;margin:0 0 20px;}
-  .field{margin-bottom:14px;}
-  .field label{display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;}
-  .field input[type=text],.field input[type=number]{width:100%;background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text);padding:9px 10px;border-radius:7px;font-family:'Inter';font-size:13px;}
-  .file-drop{border:1px dashed var(--border);border-radius:8px;padding:14px;text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer;}
-  .file-drop.has-file{color:var(--run);border-color:var(--run);background:#e8eef6;}
-  .img-preview{max-height:90px;border-radius:6px;margin-top:8px;display:block;}
-  .modal-actions{display:flex;gap:10px;margin-top:18px;}
-  .modal-actions button{flex:1;padding:11px;}
-  .close-x{position:absolute;top:16px;right:16px;background:none;color:var(--text-muted);font-size:18px;width:28px;height:28px;}
-
-  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);border:1px solid var(--text);padding:10px 18px;border-radius:8px;font-size:12px;color:#fff;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:60;display:flex;align-items:center;gap:10px;max-width:90vw;}
-  .toast.show{opacity:1;pointer-events:auto;}
-  .toast.err{background:var(--danger);border-color:var(--danger);}
-  .toast button{background:rgba(255,255,255,0.2);color:#fff;padding:4px 9px;font-size:11px;flex-shrink:0;}
-
-  .loading{color:var(--text-muted);font-size:13px;text-align:center;padding:40px;}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+:root{
+--bg:#f6f4ef;
+--panel:#ffffff;
+--panel-alt:#fbfaf7;
+--border:#e5e1d8;
+--border-soft:#ece9e0;
+--text:#2c2a26;
+--text-muted:#948e80;
+--brand:#ffaf0f;
+--brand-dark:#c98700;
+--run:#5678a3;
+--pause:#cf9b3d;
+--done:#6ea675;
+--danger:#c4564f;
+--shadow: 0 1px 2px rgba(40,35,25,0.04), 0 4px 14px rgba(40,35,25,0.05);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;padding:24px;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+.wrap{max-width:820px;margin:0 auto;}
+.role-banner{background:#eef3f0;border:1px solid #d7e4dd;color:#3f6b5c;padding:9px 14px;border-radius:8px;font-size:12.5px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;padding-bottom:20px;margin-bottom:22px;border-bottom:2px solid var(--brand);}
+.header-brand{display:flex;align-items:center;gap:12px;}
+.logo-badge{width:42px;height:42px;border-radius:10px;overflow:hidden;flex-shrink:0;box-shadow:var(--shadow);}
+.logo-badge img{width:100%;height:100%;display:block;object-fit:cover;}
+.title-block h1{font-size:24px;margin:0;color:var(--text);font-weight:700;letter-spacing:-0.01em;}
+.title-block .sub{color:var(--text-muted);font-size:13px;margin-top:5px;}
+.stats{display:flex;gap:10px;flex-wrap:wrap;}
+.stat{background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);padding:9px 16px;min-width:64px;text-align:center;}
+.stat .n{font-size:19px;font-weight:700;}
+.stat .l{font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-top:2px;}
+.stat.run .n{color:var(--run);}
+.stat.done .n{color:var(--done);}
+.toolbar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+button{font-family:'Inter';cursor:pointer;border:none;border-radius:7px;font-weight:600;font-size:13px;}
+.btn-primary{background:var(--brand);color:#241a00;padding:10px 18px;display:flex;align-items:center;gap:8px;}
+.btn-primary:hover{background:var(--brand-dark);}
+.btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border);padding:10px 16px;}
+.btn-secondary:hover{border-color:var(--text-muted);}
+.btn-ghost{background:transparent;color:var(--text-muted);padding:6px 10px;font-size:11.5px;text-decoration:underline;}
+.btn-ghost:hover{color:var(--text);}
+h2.section-title{font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:26px 0 10px;font-weight:600;}
+h2.section-title:first-of-type{margin-top:0;}
+.piece-list{display:flex;flex-direction:column;gap:8px;}
+.empty-msg{color:var(--text-muted);font-size:12.5px;text-align:center;padding:24px 8px;border:1px dashed var(--border);border-radius:8px;}
+.piece-card{background:var(--panel);border:1px solid var(--border-soft);border-left:4px solid transparent;border-radius:10px;box-shadow:var(--shadow);overflow:hidden;}
+.color-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;vertical-align:middle;margin-bottom:2px;}
+.color-picker{display:flex;gap:9px;flex-wrap:wrap;align-items:center;}
+.color-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.color-swatch.selected{border-color:var(--text);box-shadow:0 0 0 2px var(--panel);}
+.color-swatch.none{background:var(--panel-alt);border:1px dashed var(--border);color:var(--text-muted);font-size:14px;}
+.color-swatch.none.selected{border-color:var(--text);border-style:solid;}
+.piece-card.running{border-color:var(--run);}
+.piece-card.paused{border-color:var(--pause);}
+.piece-row{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;}
+.drag-handle{color:var(--text-muted);font-size:15px;cursor:grab;padding:2px 4px;flex-shrink:0;}
+.piece-icon{width:38px;height:38px;border-radius:6px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;background:var(--panel-alt);}
+.piece-icon-empty{width:38px;height:38px;border-radius:6px;border:1px dashed var(--border-soft);flex-shrink:0;}
+.piece-info{flex:1;min-width:0;}
+.piece-name{font-size:14px;font-weight:600;word-break:break-word;}
+.piece-meta{font-size:11.5px;color:var(--text-muted);margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.status-chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:9px;font-size:10.5px;font-weight:600;}
+.status-chip.pendiente{background:var(--panel-alt);color:var(--text-muted);border:1px solid var(--border-soft);}
+.status-chip.en_progreso{background:#e8eef6;color:var(--run);}
+.status-chip.pausado{background:#faf1de;color:var(--pause);}
+.status-chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.chevron{color:var(--text-muted);font-size:12px;flex-shrink:0;transition:transform 0.15s;}
+.piece-card.expanded .chevron{transform:rotate(90deg);}
+.piece-expand{display:none;padding:0 14px 14px;border-top:1px solid var(--border-soft);}
+.piece-card.expanded .piece-expand{display:block;}
+.timer-display{font-family:'IBM Plex Mono',monospace;font-size:32px;font-weight:700;text-align:center;padding:14px 0 6px;color:var(--text);}
+.timer-label{text-align:center;font-size:11px;color:var(--text-muted);margin-bottom:14px;text-transform:uppercase;letter-spacing:0.05em;}
+.action-row{display:flex;gap:8px;margin-bottom:10px;}
+.action-row button{flex:1;padding:11px;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-start{background:var(--run);color:#fff;}
+.btn-start:hover{background:#476892;}
+.btn-pause{background:var(--pause);color:#fff;}
+.btn-pause:hover{background:#b5872f;}
+.btn-finish{background:var(--done);color:#173720;}
+.btn-finish:hover{background:#5c9264;}
+.btn-pdf{background:var(--panel-alt);color:var(--text);border:1px solid var(--border-soft);width:100%;padding:11px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;}
+.btn-pdf:hover{border-color:var(--text-muted);}
+.expand-footer{display:flex;justify-content:space-between;gap:8px;margin-top:6px;}
+.comments-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border-soft);}
+.comments-section h4{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 10px;font-weight:600;}
+.comment-row{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:var(--panel-alt);border-radius:7px;margin-bottom:6px;}
+.comment-row .c-body{flex:1;min-width:0;}
+.comment-row .c-text{font-size:12.5px;color:var(--text);line-height:1.4;word-break:break-word;}
+.comment-row .c-meta{font-size:10px;color:var(--text-muted);margin-top:3px;}
+.comment-row .c-del{background:none;color:var(--text-muted);font-size:11px;width:18px;height:18px;flex-shrink:0;}
+.comment-row .c-del:hover{color:var(--danger);}
+.comment-empty{font-size:11.5px;color:var(--text-muted);margin-bottom:8px;}
+.comment-input-row{display:flex;gap:8px;margin-top:4px;}
+.comment-input-row input{flex:1;background:var(--panel-alt);border:1px solid var(--border-soft);border-radius:7px;padding:8px 10px;font-size:12.5px;font-family:'Inter';color:var(--text);}
+.comment-input-row button{padding:8px 14px;background:var(--brand);color:#241a00;flex-shrink:0;}
+.comment-input-row button:hover{background:var(--brand-dark);}
+.finished-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;box-shadow:var(--shadow);}
+.finished-row .f-icon{width:34px;height:34px;border-radius:6px;object-fit:cover;border:1px solid var(--border-soft);flex-shrink:0;background:var(--panel-alt);}
+.finished-row .f-icon-empty{width:34px;height:34px;border-radius:6px;border:1px dashed var(--border-soft);flex-shrink:0;}
+.finished-row .f-info{flex:1;min-width:0;}
+.finished-row .f-name{font-size:13.5px;font-weight:600;}
+.finished-row .f-meta{font-size:11px;color:var(--text-muted);margin-top:2px;}
+.finished-row .f-time{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;color:var(--done);flex-shrink:0;text-align:right;}
+.finished-row .f-time .f-date{display:block;font-family:'Inter';font-weight:500;font-size:10px;color:var(--text-muted);margin-top:2px;}
+.overlay{position:fixed;inset:0;background:rgba(44,42,38,0.35);display:none;align-items:center;justify-content:center;z-index:50;padding:16px;}
+.overlay.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 12px 40px rgba(40,35,25,0.18);position:relative;}
+.modal h2{font-size:17px;margin:0 0 4px;font-weight:700;}
+.modal .modal-sub{font-size:12px;color:var(--text-muted);margin-bottom:18px;}
+.modal.confirm-modal{max-width:360px;text-align:center;}
+.modal.confirm-modal p{font-size:14px;line-height:1.5;margin:0 0 20px;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;}
+.field input[type=text],.field input[type=number]{width:100%;background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text);padding:9px 10px;border-radius:7px;font-family:'Inter';font-size:13px;}
+.file-drop{border:1px dashed var(--border);border-radius:8px;padding:14px;text-align:center;font-size:12px;color:var(--text-muted);cursor:pointer;}
+.file-drop.has-file{color:var(--run);border-color:var(--run);background:#e8eef6;}
+.img-preview{max-height:90px;border-radius:6px;margin-top:8px;display:block;}
+.modal-actions{display:flex;gap:10px;margin-top:18px;}
+.modal-actions button{flex:1;padding:11px;}
+.close-x{position:absolute;top:16px;right:16px;background:none;color:var(--text-muted);font-size:18px;width:28px;height:28px;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);border:1px solid var(--text);padding:10px 18px;border-radius:8px;font-size:12px;color:#fff;opacity:0;pointer-events:none;transition:opacity 0.25s;z-index:60;display:flex;align-items:center;gap:10px;max-width:90vw;}
+.toast.show{opacity:1;pointer-events:auto;}
+.toast.err{background:var(--danger);border-color:var(--danger);}
+.toast button{background:rgba(255,255,255,0.2);color:#fff;padding:4px 9px;font-size:11px;flex-shrink:0;}
+.loading{color:var(--text-muted);font-size:13px;text-align:center;padding:40px;}
+h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:16px 0 8px;font-weight:600;}
+.chip-picker{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.chip{background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text);padding:8px 14px;border-radius:20px;font-size:12.5px;font-weight:600;font-family:'Inter';cursor:pointer;}
+.chip:hover{border-color:var(--text-muted);}
+.chip.selected{background:var(--brand);border-color:var(--brand);color:#241a00;}
+.chip.chip-add{background:transparent;border:1px dashed var(--border);color:var(--text-muted);}
+.chip.chip-add:hover{border-color:var(--text-muted);color:var(--text);}
+.chip-add-row{display:flex;gap:6px;align-items:center;width:100%;}
+.chip-add-input{flex:1;background:var(--panel-alt);border:1px solid var(--border-soft);border-radius:7px;padding:8px 10px;font-size:12.5px;font-family:'Inter';color:var(--text);}
+.chip-add-ok{background:var(--brand);color:#241a00;padding:8px 12px;border-radius:7px;flex-shrink:0;}
+.chip-add-cancel{background:var(--panel-alt);color:var(--text-muted);border:1px solid var(--border-soft);width:30px;height:30px;border-radius:7px;flex-shrink:0;}
 </style>
 </head>
 <body>
 <div class="wrap">
-
-  <div class="role-banner" id="roleBanner" style="display:none">
-    👁 Estás en modo <b>operario</b>: podés ver el plano, empezar, pausar y finalizar cada pieza. El orden de prioridad lo define quien carga las piezas.
-  </div>
-
-  <header>
-    <div class="header-brand">
-      <div class="logo-badge"><img id="logoImg" alt="Logo"></div>
-      <div class="title-block">
-        <h1>Puesto de Mecanizado</h1>
-        <div class="sub">Lista de piezas por prioridad — Torno</div>
-      </div>
-    </div>
-    <div class="stats" id="stats"></div>
-  </header>
-
-  <div class="toolbar" id="toolbar">
-    <button class="btn-primary" onclick="openCreateModal()">＋ Agregar pieza</button>
-  </div>
-
-  <h2 class="section-title">Pendientes / en curso <span id="dragHint" style="text-transform:none;font-weight:400;font-size:11px"></span></h2>
-  <div class="piece-list" id="activeList">
-    <div class="loading">Cargando piezas…</div>
-  </div>
-
-  <h2 class="section-title">Terminadas</h2>
-  <div class="piece-list" id="finishedList"></div>
-
+<div class="role-banner" id="roleBanner" style="display:none">
+👁 Estás en modo <b>operario</b>: podés ver el plano, empezar, pausar y finalizar cada pieza, y cargar trabajos extras. El orden de prioridad lo define quien carga las piezas.
 </div>
+<header>
+<div class="header-brand">
+<div class="logo-badge"><img id="logoImg" alt="Logo"></div>
+<div class="title-block">
+<h1>Puesto de Mecanizado</h1>
+<div class="sub">Lista de piezas por prioridad — Torno</div>
+</div>
+</div>
+<div class="stats" id="stats"></div>
+</header>
+<div class="toolbar" id="toolbar">
+<button class="btn-primary" onclick="openCreateModal()">＋ Agregar pieza</button>
+</div>
+<h2 class="section-title">Pendientes / en curso <span id="dragHint" style="text-transform:none;font-weight:400;font-size:11px"></span></h2>
+<div class="piece-list" id="activeList">
+<div class="loading">Cargando piezas…</div>
+</div>
+<h2 class="section-title">Terminadas</h2>
+<div class="piece-list" id="finishedList"></div>
 
+<h2 class="section-title">Retrabajos / Trabajos extras</h2>
+<div class="toolbar" id="extraToolbar">
+<button class="btn-primary" onclick="openExtraModal()">＋ Agregar trabajo extra</button>
+</div>
+<h3 class="subsection-title">Pendientes / en curso</h3>
+<div class="piece-list" id="extraActiveList">
+<div class="loading">Cargando…</div>
+</div>
+<h3 class="subsection-title">Terminadas</h3>
+<div class="piece-list" id="extraFinishedList"></div>
+</div>
 <!-- Modal: agregar / editar pieza -->
 <div class="overlay" id="createOverlay">
-  <div class="modal">
-    <button class="close-x" onclick="closeCreateModal()">✕</button>
-    <h2 id="createModalTitle">Nueva pieza</h2>
-    <div class="modal-sub">Cargala con su plano para que el operario la vea en su lista.</div>
-
-    <div class="field">
-      <label>Nombre de la pieza</label>
-      <input type="text" id="p-name" placeholder="Ej: EJE-014">
-    </div>
-    <div class="field">
-      <label>Cantidad</label>
-      <input type="number" id="p-qty" min="1" value="1">
-    </div>
-    <div class="field">
-      <label>Ícono (opcional)</label>
-      <div class="file-drop" id="iconDrop" onclick="document.getElementById('p-icon').click()">
-        <span id="iconDropText">Tocar para elegir imagen</span>
-        <input type="file" id="p-icon" accept="image/*" style="display:none" onchange="handleIconPick(event)">
-        <img id="iconPreview" class="img-preview" style="display:none">
-      </div>
-    </div>
-    <div class="field">
-      <label>Plano (PDF)</label>
-      <div class="file-drop" id="pdfDrop" onclick="document.getElementById('p-pdf').click()">
-        <span id="pdfDropText">📎 Tocar para elegir PDF</span>
-        <input type="file" id="p-pdf" accept="application/pdf" style="display:none" onchange="handlePdfPick(event)">
-      </div>
-      <div class="hint" style="font-size:11px;color:var(--text-muted);margin-top:6px">Hasta ~650 KB por archivo.</div>
-    </div>
-    <div class="field">
-      <label>Color (para ordenar visualmente por tipología)</label>
-      <div class="color-picker" id="colorPicker"></div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
-      <button class="btn-primary" id="submitPieceBtn" onclick="submitPiece()">Agregar pieza</button>
-    </div>
-  </div>
+<div class="modal">
+<button class="close-x" onclick="closeCreateModal()">✕</button>
+<h2 id="createModalTitle">Nueva pieza</h2>
+<div class="modal-sub">Cargala con su plano para que el operario la vea en su lista.</div>
+<div class="field">
+<label>Nombre de la pieza</label>
+<input type="text" id="p-name" placeholder="Ej: EJE-014">
 </div>
-
+<div class="field">
+<label>Cantidad</label>
+<input type="number" id="p-qty" min="1" value="1">
+</div>
+<div class="field">
+<label>Ícono (opcional)</label>
+<div class="file-drop" id="iconDrop" onclick="document.getElementById('p-icon').click()">
+<span id="iconDropText">Tocar para elegir imagen</span>
+<input type="file" id="p-icon" accept="image/*" style="display:none" onchange="handleIconPick(event)">
+<img id="iconPreview" class="img-preview" style="display:none">
+</div>
+</div>
+<div class="field">
+<label>Plano (PDF)</label>
+<div class="file-drop" id="pdfDrop" onclick="document.getElementById('p-pdf').click()">
+<span id="pdfDropText">📎 Tocar para elegir PDF</span>
+<input type="file" id="p-pdf" accept="application/pdf" style="display:none" onchange="handlePdfPick(event)">
+</div>
+<div class="hint" style="font-size:11px;color:var(--text-muted);margin-top:6px">Hasta ~650 KB por archivo.</div>
+</div>
+<div class="field">
+<label>Color (para ordenar visualmente por tipología)</label>
+<div class="color-picker" id="colorPicker"></div>
+</div>
+<div class="modal-actions">
+<button class="btn-secondary" onclick="closeCreateModal()">Cancelar</button>
+<button class="btn-primary" id="submitPieceBtn" onclick="submitPiece()">Agregar pieza</button>
+</div>
+</div>
+</div>
 <!-- Modal: confirmar acción -->
 <div class="overlay" id="confirmOverlay">
-  <div class="modal confirm-modal">
-    <p id="confirmMsg"></p>
-    <div class="modal-actions">
-      <button class="btn-secondary" id="confirmNo">Cancelar</button>
-      <button class="btn-primary" style="background:var(--danger)" id="confirmYes">Eliminar</button>
-    </div>
-  </div>
+<div class="modal confirm-modal">
+<p id="confirmMsg"></p>
+<div class="modal-actions">
+<button class="btn-secondary" id="confirmNo">Cancelar</button>
+<button class="btn-primary" style="background:var(--danger)" id="confirmYes">Eliminar</button>
 </div>
-
+</div>
+</div>
+<!-- Modal: agregar / editar trabajo extra -->
+<div class="overlay" id="extraOverlay">
+<div class="modal">
+<button class="close-x" onclick="closeExtraModal()">✕</button>
+<h2 id="extraModalTitle">Nuevo trabajo extra</h2>
+<div class="modal-sub">Elegí las opciones. Solo hace falta escribir la primera vez que se usa una opción nueva.</div>
+<div class="field">
+<label>Tipo de trabajo</label>
+<div class="chip-picker" id="extraCategoryPicker"></div>
+</div>
+<div class="field" id="extraProcessField" style="display:none">
+<label>Proceso</label>
+<div class="chip-picker" id="extraProcessPicker"></div>
+</div>
+<div class="field">
+<label>Cantidad</label>
+<input type="number" id="ex-qty" min="1" value="1">
+</div>
+<div class="field">
+<label>Solicitado por</label>
+<div class="chip-picker" id="extraSolicitantePicker"></div>
+</div>
+<div class="modal-actions">
+<button class="btn-secondary" onclick="closeExtraModal()">Cancelar</button>
+<button class="btn-primary" id="submitExtraBtn" onclick="submitExtra()">Agregar trabajo extra</button>
+</div>
+</div>
+</div>
 <div class="toast" id="toast"><span id="toastMsg"></span></div>
-
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
 const firebaseConfig = {
-  apiKey: "AIzaSyAGfRsHlV_6xpzshygUWW13CEPRCflP9GE",
-  authDomain: "panel-corte.firebaseapp.com",
-  projectId: "panel-corte",
-  storageBucket: "panel-corte.firebasestorage.app",
-  messagingSenderId: "383812281538",
-  appId: "1:383812281538:web:58bf18db93a3bd9731475b"
+apiKey: "AIzaSyAGfRsHlV_6xpzshygUWW13CEPRCflP9GE",
+authDomain: "panel-corte.firebaseapp.com",
+projectId: "panel-corte",
+storageBucket: "panel-corte.firebasestorage.app",
+messagingSenderId: "383812281538",
+appId: "1:383812281538:web:58bf18db93a3bd9731475b"
 };
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
-
 /* colecciones propias de esta página (torno_*) para no pisar los datos
-   del panel de corte, que vive en las colecciones panel/images/dxf del
-   mismo proyecto de Firebase. */
+del panel de corte, que vive en las colecciones panel/images/dxf del
+mismo proyecto de Firebase. */
 const META_KEY = 'torno-meta';
+const EXTRA_META_KEY = 'torno-extra-meta';
 function keyToRef(key){
-  if(key === META_KEY) return doc(db, 'torno_panel', 'meta');
-  if(key.startsWith('icon:')) return doc(db, 'torno_icons', key.slice(5));
-  if(key.startsWith('pdf:')) return doc(db, 'torno_pdfs', key.slice(4));
-  return doc(db, 'torno_misc', key);
+if(key === META_KEY) return doc(db, 'torno_panel', 'meta');
+if(key === EXTRA_META_KEY) return doc(db, 'torno_panel', 'extra_meta');
+if(key.startsWith('icon:')) return doc(db, 'torno_icons', key.slice(5));
+if(key.startsWith('pdf:')) return doc(db, 'torno_pdfs', key.slice(4));
+return doc(db, 'torno_misc', key);
 }
 async function storageGet(key){
-  const snap = await getDoc(keyToRef(key));
-  return snap.exists() ? { value: snap.data().value } : null;
+const snap = await getDoc(keyToRef(key));
+return snap.exists() ? { value: snap.data().value } : null;
 }
 async function storageSet(key, value){
-  await setDoc(keyToRef(key), { value, updatedAt: Date.now() });
-  return { value };
+await setDoc(keyToRef(key), { value, updatedAt: Date.now() });
+return { value };
 }
 async function storageDelete(key){
-  await deleteDoc(keyToRef(key));
+await deleteDoc(keyToRef(key));
 }
 async function setFile(key, value){
-  try{ return await storageSet(key, value); }catch(e){ return null; }
+try{ return await storageSet(key, value); }catch(e){ return null; }
 }
 async function deleteFile(key){
-  try{ await storageDelete(key); }catch(e){}
+try{ await storageDelete(key); }catch(e){}
 }
-
-const LOGO_B64 = "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";
+const LOGO_B64 = "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";
 document.getElementById('logoImg').src = 'data:image/png;base64,' + LOGO_B64;
-
 let pieces = [];
 let iconCache = {};
 let pendingIcon = null;
@@ -291,571 +312,770 @@ let pendingColor = null;
 let editingPieceId = null;
 let dragPieceId = null;
 let openRowId = null;
-
 const COLOR_PALETTE = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#16a085','#3498db','#9b59b6','#7f8c8d'];
-
 function renderColorPicker(selected){
-  const wrap = document.getElementById('colorPicker');
-  wrap.innerHTML = '';
-  const noneBtn = document.createElement('div');
-  noneBtn.className = 'color-swatch none' + (!selected ? ' selected' : '');
-  noneBtn.title = 'Sin color';
-  noneBtn.textContent = '✕';
-  noneBtn.onclick = ()=> pickColor(null);
-  wrap.appendChild(noneBtn);
-  COLOR_PALETTE.forEach(c=>{
-    const sw = document.createElement('div');
-    sw.className = 'color-swatch' + (selected===c ? ' selected' : '');
-    sw.style.background = c;
-    sw.title = c;
-    sw.onclick = ()=> pickColor(c);
-    wrap.appendChild(sw);
-  });
+const wrap = document.getElementById('colorPicker');
+wrap.innerHTML = '';
+const noneBtn = document.createElement('div');
+noneBtn.className = 'color-swatch none' + (!selected ? ' selected' : '');
+noneBtn.title = 'Sin color';
+noneBtn.textContent = '✕';
+noneBtn.onclick = ()=> pickColor(null);
+wrap.appendChild(noneBtn);
+COLOR_PALETTE.forEach(c=>{
+const sw = document.createElement('div');
+sw.className = 'color-swatch' + (selected===c ? ' selected' : '');
+sw.style.background = c;
+sw.title = c;
+sw.onclick = ()=> pickColor(c);
+wrap.appendChild(sw);
+});
 }
 function pickColor(c){
-  pendingColor = c;
-  renderColorPicker(c);
+pendingColor = c;
+renderColorPicker(c);
 }
-
+/* ---------- trabajos extras / retrabajos ---------- */
+const CATEGORIES = [
+{id:'produccion', label:'Pieza de Producción'},
+{id:'calidad', label:'Pieza de Calidad'},
+{id:'mantenimiento', label:'Pieza de Mantenimiento'},
+{id:'deposito', label:'Pieza de Depósito'}
+];
+const BASE_PROCESOS = ['Mecanizado','Soldadura','Armado de Cilindros'];
+let customProcesos = [];
+let solicitantes = [];
+let extraCategory = null;
+let extraProcess = null;
+let extraSolicitante = null;
+let editingExtraId = null;
+let addingProcessInline = false;
+let addingSolicitanteInline = false;
+function getAllProcesos(){
+const seen = new Set();
+const out = [];
+BASE_PROCESOS.concat(customProcesos).forEach(p=>{ if(!seen.has(p)){ seen.add(p); out.push(p); } });
+return out;
+}
+async function loadExtraCatalog(){
+try{
+const res = await storageGet(EXTRA_META_KEY);
+const data = res && res.value ? JSON.parse(res.value) : {};
+customProcesos = data.procesos || [];
+solicitantes = data.solicitantes || [];
+}catch(e){
+customProcesos = [];
+solicitantes = [];
+}
+}
+async function saveExtraCatalog(){
+try{ await storageSet(EXTRA_META_KEY, JSON.stringify({procesos: customProcesos, solicitantes})); }catch(e){}
+}
+function buildInlineAddRow(placeholder, onConfirm, onCancel){
+const row = document.createElement('div');
+row.className = 'chip-add-row';
+const input = document.createElement('input');
+input.type = 'text';
+input.placeholder = placeholder;
+input.className = 'chip-add-input';
+const ok = document.createElement('button');
+ok.type = 'button'; ok.className = 'chip-add-ok'; ok.textContent = 'Agregar';
+ok.onclick = ()=>{ const val = input.value.trim(); if(!val) return; onConfirm(val); };
+const cancel = document.createElement('button');
+cancel.type = 'button'; cancel.className = 'chip-add-cancel'; cancel.textContent = '✕';
+cancel.onclick = onCancel;
+input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); ok.click(); } });
+row.appendChild(input); row.appendChild(ok); row.appendChild(cancel);
+setTimeout(()=> input.focus(), 30);
+return row;
+}
+function renderExtraCategoryPicker(){
+const wrap = document.getElementById('extraCategoryPicker');
+wrap.innerHTML = '';
+CATEGORIES.forEach(cat=>{
+const chip = document.createElement('button');
+chip.type = 'button';
+chip.className = 'chip' + (extraCategory===cat.id ? ' selected' : '');
+chip.textContent = cat.label;
+chip.onclick = ()=> pickExtraCategory(cat.id);
+wrap.appendChild(chip);
+});
+}
+function pickExtraCategory(id){
+extraCategory = id;
+if(id !== 'produccion') extraProcess = null;
+renderExtraCategoryPicker();
+document.getElementById('extraProcessField').style.display = (id==='produccion') ? 'block' : 'none';
+if(id==='produccion') renderExtraProcessPicker();
+}
+function renderExtraProcessPicker(){
+const wrap = document.getElementById('extraProcessPicker');
+wrap.innerHTML = '';
+if(addingProcessInline){
+wrap.appendChild(buildInlineAddRow('Ej: Rectificado', async (val)=>{
+if(!getAllProcesos().includes(val)) customProcesos.push(val);
+extraProcess = val;
+addingProcessInline = false;
+await saveExtraCatalog();
+renderExtraProcessPicker();
+}, ()=>{ addingProcessInline=false; renderExtraProcessPicker(); }));
+return;
+}
+getAllProcesos().forEach(proc=>{
+const chip = document.createElement('button');
+chip.type = 'button';
+chip.className = 'chip' + (extraProcess===proc ? ' selected' : '');
+chip.textContent = proc;
+chip.onclick = ()=>{ extraProcess = proc; renderExtraProcessPicker(); };
+wrap.appendChild(chip);
+});
+const addChip = document.createElement('button');
+addChip.type = 'button'; addChip.className = 'chip chip-add'; addChip.textContent = '＋ Agregar opción';
+addChip.onclick = ()=>{ addingProcessInline = true; renderExtraProcessPicker(); };
+wrap.appendChild(addChip);
+}
+function renderExtraSolicitantePicker(){
+const wrap = document.getElementById('extraSolicitantePicker');
+wrap.innerHTML = '';
+if(addingSolicitanteInline){
+wrap.appendChild(buildInlineAddRow('Nombre y apellido', async (val)=>{
+if(!solicitantes.includes(val)) solicitantes.push(val);
+extraSolicitante = val;
+addingSolicitanteInline = false;
+await saveExtraCatalog();
+renderExtraSolicitantePicker();
+}, ()=>{ addingSolicitanteInline=false; renderExtraSolicitantePicker(); }));
+return;
+}
+solicitantes.forEach(s=>{
+const chip = document.createElement('button');
+chip.type = 'button';
+chip.className = 'chip' + (extraSolicitante===s ? ' selected' : '');
+chip.textContent = s;
+chip.onclick = ()=>{ extraSolicitante = s; renderExtraSolicitantePicker(); };
+wrap.appendChild(chip);
+});
+const addChip = document.createElement('button');
+addChip.type = 'button'; addChip.className = 'chip chip-add'; addChip.textContent = '＋ Agregar opción';
+addChip.onclick = ()=>{ addingSolicitanteInline = true; renderExtraSolicitantePicker(); };
+wrap.appendChild(addChip);
+}
+function buildExtraName(p){
+const catLabel = (CATEGORIES.find(c=>c.id===p.category)||{}).label || 'Trabajo extra';
+return p.process ? `${catLabel} — ${p.process}` : catLabel;
+}
 const params = new URLSearchParams(window.location.search);
 const isOperarioView = params.get('rol') === 'operario';
-
 function uid(prefix){ return (prefix||'id') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
-
 /* ---------- toast ---------- */
 let toastTimer = null;
 function showToast(msg, isErr, retryFn){
-  const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
-  t.querySelectorAll('button').forEach(b=>b.remove());
-  if(retryFn){
-    const btn = document.createElement('button');
-    btn.textContent = 'Reintentar';
-    btn.onclick = ()=>{ t.className='toast'; retryFn(); };
-    t.appendChild(btn);
-  }
-  t.className = 'toast show' + (isErr ? ' err' : '');
-  clearTimeout(toastTimer);
-  if(!retryFn){ toastTimer = setTimeout(()=> t.className = 'toast', 2600); }
+const t = document.getElementById('toast');
+document.getElementById('toastMsg').textContent = msg;
+t.querySelectorAll('button').forEach(b=>b.remove());
+if(retryFn){
+const btn = document.createElement('button');
+btn.textContent = 'Reintentar';
+btn.onclick = ()=>{ t.className='toast'; retryFn(); };
+t.appendChild(btn);
 }
-
+t.className = 'toast show' + (isErr ? ' err' : '');
+clearTimeout(toastTimer);
+if(!retryFn){ toastTimer = setTimeout(()=> t.className = 'toast', 2600); }
+}
 /* ---------- confirmación propia (confirm() nativo queda bloqueado en el artefacto) ---------- */
 function askConfirm(message){
-  return new Promise(resolve=>{
-    const overlay = document.getElementById('confirmOverlay');
-    document.getElementById('confirmMsg').textContent = message;
-    overlay.classList.add('open');
-    const yes = document.getElementById('confirmYes');
-    const no = document.getElementById('confirmNo');
-    const cleanup = (result)=>{ overlay.classList.remove('open'); yes.onclick=null; no.onclick=null; resolve(result); };
-    yes.onclick = ()=> cleanup(true);
-    no.onclick = ()=> cleanup(false);
-  });
+return new Promise(resolve=>{
+const overlay = document.getElementById('confirmOverlay');
+document.getElementById('confirmMsg').textContent = message;
+overlay.classList.add('open');
+const yes = document.getElementById('confirmYes');
+const no = document.getElementById('confirmNo');
+const cleanup = (result)=>{ overlay.classList.remove('open'); yes.onclick=null; no.onclick=null; resolve(result); };
+yes.onclick = ()=> cleanup(true);
+no.onclick = ()=> cleanup(false);
+});
 }
-
 /* ---------- guardado con reintentos ---------- */
 let saveChain = Promise.resolve();
 function queueSave(){
-  saveChain = saveChain.then(()=> saveMetaWithRetry());
-  return saveChain;
+saveChain = saveChain.then(()=> saveMetaWithRetry());
+return saveChain;
 }
 async function saveMetaWithRetry(attempt){
-  attempt = attempt || 1;
-  try{
-    const result = await storageSet(META_KEY, JSON.stringify(pieces));
-    if(result) return true;
-    throw new Error('sin resultado');
-  }catch(e){
-    if(attempt < 3){
-      await new Promise(r=> setTimeout(r, 500*attempt));
-      return saveMetaWithRetry(attempt+1);
-    }
-    showToast('No se pudo guardar el último cambio.', true, ()=> queueSave());
-    return false;
-  }
+attempt = attempt || 1;
+try{
+const result = await storageSet(META_KEY, JSON.stringify(pieces));
+if(result) return true;
+throw new Error('sin resultado');
+}catch(e){
+if(attempt < 3){
+await new Promise(r=> setTimeout(r, 500*attempt));
+return saveMetaWithRetry(attempt+1);
 }
-
+showToast('No se pudo guardar el último cambio.', true, ()=> queueSave());
+return false;
+}
+}
 async function loadPieces(){
-  try{
-    const res = await storageGet(META_KEY);
-    pieces = res && res.value ? JSON.parse(res.value) : [];
-  }catch(e){
-    pieces = [];
-  }
-  if(isOperarioView){
-    document.getElementById('toolbar').style.display = 'none';
-    document.getElementById('roleBanner').style.display = 'flex';
-  }else{
-    document.getElementById('dragHint').textContent = '— arrastrá para reordenar';
-  }
-  render();
-  const withIcon = pieces.filter(p=>p.hasIcon);
-  await Promise.all(withIcon.map(async p=>{
-    try{
-      const res = await storageGet('icon:'+p.id);
-      if(res && res.value) iconCache[p.id] = res.value;
-    }catch(e){}
-  }));
-  if(withIcon.length) render();
+try{
+const res = await storageGet(META_KEY);
+pieces = res && res.value ? JSON.parse(res.value) : [];
+}catch(e){
+pieces = [];
 }
-
+if(isOperarioView){
+document.getElementById('toolbar').style.display = 'none';
+document.getElementById('roleBanner').style.display = 'flex';
+}else{
+document.getElementById('dragHint').textContent = '— arrastrá para reordenar';
+}
+render();
+const withIcon = pieces.filter(p=>p.hasIcon);
+await Promise.all(withIcon.map(async p=>{
+try{
+const res = await storageGet('icon:'+p.id);
+if(res && res.value) iconCache[p.id] = res.value;
+}catch(e){}
+}));
+if(withIcon.length) render();
+}
 /* ---------- helpers de tiempo ---------- */
 function getElapsedMs(p){
-  let ms = p.accumulatedMs || 0;
-  if(p.status==='en_progreso' && p.startedAt) ms += (Date.now() - p.startedAt);
-  return ms;
+let ms = p.accumulatedMs || 0;
+if(p.status==='en_progreso' && p.startedAt) ms += (Date.now() - p.startedAt);
+return ms;
 }
 function formatDuration(ms){
-  const totalSec = Math.max(0, Math.floor(ms/1000));
-  const h = Math.floor(totalSec/3600);
-  const m = Math.floor((totalSec%3600)/60);
-  const s = totalSec%60;
-  const pad = n=> String(n).padStart(2,'0');
-  return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+const totalSec = Math.max(0, Math.floor(ms/1000));
+const h = Math.floor(totalSec/3600);
+const m = Math.floor((totalSec%3600)/60);
+const s = totalSec%60;
+const pad = n=> String(n).padStart(2,'0');
+return h>0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 function formatDurationLong(ms){
-  const totalMin = Math.round(ms/60000);
-  const h = Math.floor(totalMin/60);
-  const m = totalMin%60;
-  if(h>0) return `${h}h ${m}m`;
-  if(m>0) return `${m}m`;
-  return `${Math.round(ms/1000)}s`;
+const totalMin = Math.round(ms/60000);
+const h = Math.floor(totalMin/60);
+const m = totalMin%60;
+if(h>0) return `${h}h ${m}m`;
+if(m>0) return `${m}m`;
+return `${Math.round(ms/1000)}s`;
 }
 function formatDate(ts){
-  if(!ts) return '';
-  return new Date(ts).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'}) + ' ' + new Date(ts).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
+if(!ts) return '';
+return new Date(ts).toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'}) + ' ' + new Date(ts).toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'});
 }
-
 /* ---------- render ---------- */
-function getActiveSorted(){
-  return pieces.filter(p=>p.status!=='terminada').sort((a,b)=> (a.order||0)-(b.order||0));
+function getActiveSorted(type){
+type = type || 'pieza';
+return pieces.filter(p=>p.status!=='terminada' && (p.type||'pieza')===type).sort((a,b)=> (a.order||0)-(b.order||0));
 }
-function getFinishedSorted(){
-  return pieces.filter(p=>p.status==='terminada').sort((a,b)=> (b.finishedAt||0)-(a.finishedAt||0));
+function getFinishedSorted(type){
+type = type || 'pieza';
+return pieces.filter(p=>p.status==='terminada' && (p.type||'pieza')===type).sort((a,b)=> (b.finishedAt||0)-(a.finishedAt||0));
 }
-
 function render(){
-  renderStats();
-  renderActiveList();
-  renderFinishedList();
+renderStats();
+renderActiveList();
+renderFinishedList();
+renderExtraActiveList();
+renderExtraFinishedList();
 }
-
 function renderStats(){
-  const pendientes = pieces.filter(p=>p.status==='pendiente').length;
-  const enCurso = pieces.filter(p=>p.status==='en_progreso'||p.status==='pausado').length;
-  const terminadas = pieces.filter(p=>p.status==='terminada').length;
-  document.getElementById('stats').innerHTML = `
-    <div class="stat"><div class="n">${pendientes}</div><div class="l">Pendientes</div></div>
-    <div class="stat run"><div class="n">${enCurso}</div><div class="l">En curso</div></div>
-    <div class="stat done"><div class="n">${terminadas}</div><div class="l">Terminadas</div></div>
-  `;
+const soloPiezas = pieces.filter(p=>(p.type||'pieza')==='pieza');
+const pendientes = soloPiezas.filter(p=>p.status==='pendiente').length;
+const enCurso = soloPiezas.filter(p=>p.status==='en_progreso'||p.status==='pausado').length;
+const terminadas = soloPiezas.filter(p=>p.status==='terminada').length;
+document.getElementById('stats').innerHTML = `
+<div class="stat"><div class="n">${pendientes}</div><div class="l">Pendientes</div></div>
+<div class="stat run"><div class="n">${enCurso}</div><div class="l">En curso</div></div>
+<div class="stat done"><div class="n">${terminadas}</div><div class="l">Terminadas</div></div>
+`;
 }
-
 function renderActiveList(){
-  const list = document.getElementById('activeList');
-  const items = getActiveSorted();
-  list.innerHTML = '';
-  if(items.length===0){
-    list.innerHTML = `<div class="empty-msg">No hay piezas cargadas todavía</div>`;
-    return;
-  }
-  items.forEach(p=> list.appendChild(renderPieceCard(p)));
+const list = document.getElementById('activeList');
+const items = getActiveSorted('pieza');
+list.innerHTML = '';
+if(items.length===0){
+list.innerHTML = `<div class="empty-msg">No hay piezas cargadas todavía</div>`;
+return;
 }
-
+items.forEach(p=> list.appendChild(renderPieceCard(p)));
+}
+function renderExtraActiveList(){
+const list = document.getElementById('extraActiveList');
+const items = getActiveSorted('extra');
+list.innerHTML = '';
+if(items.length===0){
+list.innerHTML = `<div class="empty-msg">No hay trabajos extra cargados</div>`;
+return;
+}
+items.forEach(p=> list.appendChild(renderPieceCard(p)));
+}
+function renderExtraFinishedList(){
+const list = document.getElementById('extraFinishedList');
+const items = getFinishedSorted('extra');
+list.innerHTML = '';
+if(items.length===0){
+list.innerHTML = `<div class="empty-msg">Todavía no hay trabajos extra terminados</div>`;
+return;
+}
+items.forEach(p=> list.appendChild(renderPieceCard(p)));
+}
 function renderPieceCard(p){
-  const isFinished = p.status==='terminada';
-  const card = document.createElement('div');
-  const statusClass = p.status==='en_progreso' ? 'running' : (p.status==='pausado' ? 'paused' : '');
-  card.className = 'piece-card ' + statusClass + (openRowId===p.id ? ' expanded' : '');
-  card.draggable = !isOperarioView && !isFinished;
-  if(p.color) card.style.borderLeftColor = p.color;
-  if(!isFinished){
-    card.addEventListener('dragstart', ()=> dragPieceId = p.id);
-    card.addEventListener('dragover', e=>{
-      e.preventDefault();
-      if(!dragPieceId || dragPieceId===p.id) return;
-      const activeList = getActiveSorted();
-      const fromIdx = activeList.findIndex(x=>x.id===dragPieceId);
-      const toIdx = activeList.findIndex(x=>x.id===p.id);
-      if(fromIdx===-1 || toIdx===-1 || fromIdx===toIdx) return;
-      const [moved] = activeList.splice(fromIdx,1);
-      activeList.splice(toIdx,0,moved);
-      activeList.forEach((item,idx)=> item.order = idx);
-      renderActiveList();
-    });
-    card.addEventListener('dragend', ()=>{ dragPieceId=null; queueSave(); });
-  }
-
-  const iconSrc = iconCache[p.id];
-  const iconHtml = iconSrc ? `<img src="${iconSrc}" class="piece-icon">` : `<div class="piece-icon-empty"></div>`;
-  const dragHandle = (isOperarioView || isFinished) ? '' : `<span class="drag-handle">⠿</span>`;
-
-  let statusLabel = 'Pendiente';
-  if(p.status==='en_progreso') statusLabel = 'En curso ' + formatDuration(getElapsedMs(p));
-  if(p.status==='pausado') statusLabel = 'Pausado ' + formatDuration(getElapsedMs(p));
-  if(isFinished) statusLabel = 'Terminada ' + formatDurationLong(p.totalMs||0);
-
-  const row = document.createElement('div');
-  row.className = 'piece-row';
-  row.innerHTML = `
-    ${dragHandle}
-    ${iconHtml}
-    <div class="piece-info">
-      <div class="piece-name">${p.color ? `<span class="color-dot" style="background:${p.color}"></span> ` : ''}${escapeHtml(p.name)}</div>
-      <div class="piece-meta">
-        <span>×${p.qty}</span>
-        <span class="status-chip ${isFinished?'pausado':p.status}" ${p.status!=='pendiente' ? 'id="chip_'+p.id+'"' : ''}><span class="dot"></span>${statusLabel}</span>
-        ${isFinished ? `<span>${formatDate(p.finishedAt)}</span>` : ''}
-        ${(p.comments && p.comments.length) ? `<span>💬 ${p.comments.length}</span>` : ''}
-      </div>
-    </div>
-    <span class="chevron">▸</span>
-  `;
-  row.addEventListener('click', (e)=>{
-    if(e.target.closest('.drag-handle')) return;
-    toggleExpand(p.id);
-  });
-  card.appendChild(row);
-
-  const expand = document.createElement('div');
-  expand.className = 'piece-expand';
-  const pdfBtn = p.hasPdf ? `<button class="btn-pdf" onclick="event.stopPropagation(); viewPdf('${p.id}')">📄 Visualizar PDF</button>` : `<div class="hint" style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Esta pieza no tiene plano cargado.</div>`;
-
-  let timerBlock = '';
-  let actionButtons = '';
-  if(isFinished){
-    const reopenBtn = isOperarioView ? '' : `<div class="action-row"><button class="btn-secondary" style="width:100%" onclick="event.stopPropagation(); reopenPiece('${p.id}')">↩ Reabrir</button></div>`;
-    actionButtons = reopenBtn;
-  }else{
-    timerBlock = `
-      <div class="timer-display" id="timer_${p.id}">${formatDuration(getElapsedMs(p))}</div>
-      <div class="timer-label">Tiempo trabajado</div>
-    `;
-    if(p.status==='pendiente'){
-      actionButtons = `<div class="action-row"><button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Empezar</button></div>`;
-    }else if(p.status==='en_progreso'){
-      actionButtons = `<div class="action-row">
-        <button class="btn-pause" onclick="event.stopPropagation(); pausePiece('${p.id}')">⏸ Pausar</button>
-        <button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
-      </div>`;
-    }else if(p.status==='pausado'){
-      actionButtons = `<div class="action-row">
-        <button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Reanudar</button>
-        <button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
-      </div>`;
-    }
-  }
-
-  const footerBtns = isOperarioView ? '' : `
-    <div class="expand-footer">
-      <button class="btn-ghost" onclick="event.stopPropagation(); startEditPiece('${p.id}')">✎ Editar</button>
-      <button class="btn-ghost" style="color:var(--danger)" onclick="event.stopPropagation(); deletePieceConfirm('${p.id}')">🗑 Eliminar</button>
-    </div>`;
-
-  expand.innerHTML = `
-    ${timerBlock}
-    ${pdfBtn}
-    ${actionButtons}
-    ${footerBtns}
-    ${renderCommentsHtml(p)}
-  `;
-  card.appendChild(expand);
-  return card;
+const type = p.type || 'pieza';
+const isFinished = p.status==='terminada';
+const card = document.createElement('div');
+const statusClass = p.status==='en_progreso' ? 'running' : (p.status==='pausado' ? 'paused' : '');
+card.className = 'piece-card ' + statusClass + (openRowId===p.id ? ' expanded' : '');
+const draggableAllowed = (type==='extra' ? true : !isOperarioView) && !isFinished;
+card.draggable = draggableAllowed;
+if(p.color) card.style.borderLeftColor = p.color;
+if(draggableAllowed){
+card.addEventListener('dragstart', ()=> dragPieceId = p.id);
+card.addEventListener('dragover', e=>{
+e.preventDefault();
+if(!dragPieceId || dragPieceId===p.id) return;
+const activeList = getActiveSorted(type);
+const fromIdx = activeList.findIndex(x=>x.id===dragPieceId);
+const toIdx = activeList.findIndex(x=>x.id===p.id);
+if(fromIdx===-1 || toIdx===-1 || fromIdx===toIdx) return;
+const [moved] = activeList.splice(fromIdx,1);
+activeList.splice(toIdx,0,moved);
+activeList.forEach((item,idx)=> item.order = idx);
+if(type==='extra') renderExtraActiveList(); else renderActiveList();
+});
+card.addEventListener('dragend', ()=>{ dragPieceId=null; queueSave(); });
 }
-
+const iconSrc = iconCache[p.id];
+const iconHtml = type==='extra'
+? `<div class="piece-icon-empty" style="display:flex;align-items:center;justify-content:center;font-size:16px;">🛠️</div>`
+: (iconSrc ? `<img src="${iconSrc}" class="piece-icon">` : `<div class="piece-icon-empty"></div>`);
+const dragHandle = draggableAllowed ? `<span class="drag-handle">⠿</span>` : '';
+let statusLabel = 'Pendiente';
+if(p.status==='en_progreso') statusLabel = 'En curso ' + formatDuration(getElapsedMs(p));
+if(p.status==='pausado') statusLabel = 'Pausado ' + formatDuration(getElapsedMs(p));
+if(isFinished) statusLabel = 'Terminada ' + formatDurationLong(p.totalMs||0);
+const row = document.createElement('div');
+row.className = 'piece-row';
+row.innerHTML = `
+${dragHandle}
+${iconHtml}
+<div class="piece-info">
+<div class="piece-name">${p.color ? `<span class="color-dot" style="background:${p.color}"></span> ` : ''}${escapeHtml(p.name)}</div>
+<div class="piece-meta">
+<span>×${p.qty}</span>
+${type==='extra' ? `<span>Solicita: ${escapeHtml(p.solicitante||'-')}</span>` : ''}
+<span class="status-chip ${isFinished?'pausado':p.status}" ${p.status!=='pendiente' ? 'id="chip_'+p.id+'"' : ''}><span class="dot"></span>${statusLabel}</span>
+${isFinished ? `<span>${formatDate(p.finishedAt)}</span>` : ''}
+${(p.comments && p.comments.length) ? `<span>💬 ${p.comments.length}</span>` : ''}
+</div>
+</div>
+<span class="chevron">▸</span>
+`;
+row.addEventListener('click', (e)=>{
+if(e.target.closest('.drag-handle')) return;
+toggleExpand(p.id);
+});
+card.appendChild(row);
+const expand = document.createElement('div');
+expand.className = 'piece-expand';
+const pdfBtn = type==='extra' ? '' : (p.hasPdf ? `<button class="btn-pdf" onclick="event.stopPropagation(); viewPdf('${p.id}')">📄 Visualizar PDF</button>` : `<div class="hint" style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Esta pieza no tiene plano cargado.</div>`);
+let timerBlock = '';
+let actionButtons = '';
+if(isFinished){
+const reopenBtn = (type==='pieza' && isOperarioView) ? '' : `<div class="action-row"><button class="btn-secondary" style="width:100%" onclick="event.stopPropagation(); reopenPiece('${p.id}')">↩ Reabrir</button></div>`;
+actionButtons = reopenBtn;
+}else{
+timerBlock = `
+<div class="timer-display" id="timer_${p.id}">${formatDuration(getElapsedMs(p))}</div>
+<div class="timer-label">Tiempo trabajado</div>
+`;
+if(p.status==='pendiente'){
+actionButtons = `<div class="action-row"><button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Empezar</button></div>`;
+}else if(p.status==='en_progreso'){
+actionButtons = `<div class="action-row">
+<button class="btn-pause" onclick="event.stopPropagation(); pausePiece('${p.id}')">⏸ Pausar</button>
+<button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
+</div>`;
+}else if(p.status==='pausado'){
+actionButtons = `<div class="action-row">
+<button class="btn-start" onclick="event.stopPropagation(); startPiece('${p.id}')">▶ Reanudar</button>
+<button class="btn-finish" onclick="event.stopPropagation(); finishPiece('${p.id}')">✔ Finalizar</button>
+</div>`;
+}
+}
+const footerBtns = (type==='pieza' && isOperarioView) ? '' : `
+<div class="expand-footer">
+<button class="btn-ghost" onclick="event.stopPropagation(); ${type==='extra' ? `startEditExtra('${p.id}')` : `startEditPiece('${p.id}')`}">✎ Editar</button>
+<button class="btn-ghost" style="color:var(--danger)" onclick="event.stopPropagation(); deletePieceConfirm('${p.id}')">🗑 Eliminar</button>
+</div>`;
+expand.innerHTML = `
+${timerBlock}
+${pdfBtn}
+${actionButtons}
+${footerBtns}
+${renderCommentsHtml(p)}
+`;
+card.appendChild(expand);
+return card;
+}
 function renderCommentsHtml(p){
-  const comments = p.comments || [];
-  const listHtml = comments.length ? comments.map(c=>`
-    <div class="comment-row">
-      <div class="c-body">
-        <div class="c-text">${escapeHtml(c.text)}</div>
-        <div class="c-meta">${c.role==='operario'?'Operario':'Administración'} — ${formatDate(c.ts)}</div>
-      </div>
-      ${isOperarioView ? '' : `<button class="c-del" onclick="event.stopPropagation(); removeComment('${p.id}','${c.id}')">✕</button>`}
-    </div>
-  `).join('') : `<div class="comment-empty">Sin comentarios todavía.</div>`;
-  return `
-    <div class="comments-section" onclick="event.stopPropagation()">
-      <h4>Comentarios</h4>
-      ${listHtml}
-      <div class="comment-input-row">
-        <input type="text" id="comment_input_${p.id}" placeholder="Escribir un comentario…" onkeydown="if(event.key==='Enter'){ addComment('${p.id}'); }">
-        <button onclick="addComment('${p.id}')">Enviar</button>
-      </div>
-    </div>
-  `;
+const comments = p.comments || [];
+const listHtml = comments.length ? comments.map(c=>`
+<div class="comment-row">
+<div class="c-body">
+<div class="c-text">${escapeHtml(c.text)}</div>
+<div class="c-meta">${c.role==='operario'?'Operario':'Administración'} — ${formatDate(c.ts)}</div>
+</div>
+${isOperarioView ? '' : `<button class="c-del" onclick="event.stopPropagation(); removeComment('${p.id}','${c.id}')">✕</button>`}
+</div>
+`).join('') : `<div class="comment-empty">Sin comentarios todavía.</div>`;
+return `
+<div class="comments-section" onclick="event.stopPropagation()">
+<h4>Comentarios</h4>
+${listHtml}
+<div class="comment-input-row">
+<input type="text" id="comment_input_${p.id}" placeholder="Escribir un comentario…" onkeydown="if(event.key==='Enter'){ addComment('${p.id}'); }">
+<button onclick="addComment('${p.id}')">Enviar</button>
+</div>
+</div>
+`;
 }
-
 async function addComment(pieceId){
-  const input = document.getElementById('comment_input_'+pieceId);
-  if(!input) return;
-  const text = input.value.trim();
-  if(!text) return;
-  const p = pieces.find(x=>x.id===pieceId);
-  if(!p) return;
-  if(!p.comments) p.comments = [];
-  p.comments.push({ id: uid('cm'), text, role: isOperarioView ? 'operario' : 'administración', ts: Date.now() });
-  render();
-  await queueSave();
+const input = document.getElementById('comment_input_'+pieceId);
+if(!input) return;
+const text = input.value.trim();
+if(!text) return;
+const p = pieces.find(x=>x.id===pieceId);
+if(!p) return;
+if(!p.comments) p.comments = [];
+p.comments.push({ id: uid('cm'), text, role: isOperarioView ? 'operario' : 'administración', ts: Date.now() });
+render();
+await queueSave();
 }
 async function removeComment(pieceId, commentId){
-  if(isOperarioView) return;
-  const p = pieces.find(x=>x.id===pieceId);
-  if(!p || !p.comments) return;
-  p.comments = p.comments.filter(c=>c.id!==commentId);
-  render();
-  await queueSave();
+if(isOperarioView) return;
+const p = pieces.find(x=>x.id===pieceId);
+if(!p || !p.comments) return;
+p.comments = p.comments.filter(c=>c.id!==commentId);
+render();
+await queueSave();
 }
-
 function renderFinishedList(){
-  const list = document.getElementById('finishedList');
-  const items = getFinishedSorted();
-  list.innerHTML = '';
-  if(items.length===0){
-    list.innerHTML = `<div class="empty-msg">Todavía no hay piezas terminadas</div>`;
-    return;
-  }
-  items.forEach(p=> list.appendChild(renderPieceCard(p)));
+const list = document.getElementById('finishedList');
+const items = getFinishedSorted('pieza');
+list.innerHTML = '';
+if(items.length===0){
+list.innerHTML = `<div class="empty-msg">Todavía no hay piezas terminadas</div>`;
+return;
 }
-
+items.forEach(p=> list.appendChild(renderPieceCard(p)));
+}
 function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
 function toggleExpand(id){
-  openRowId = (openRowId===id) ? null : id;
-  renderActiveList();
+openRowId = (openRowId===id) ? null : id;
+renderActiveList();
 }
-
 /* ---------- cronómetro (tick cada 1s) ---------- */
 setInterval(()=>{
-  pieces.filter(p=>p.status==='en_progreso').forEach(p=>{
-    const timerEl = document.getElementById('timer_'+p.id);
-    if(timerEl) timerEl.textContent = formatDuration(getElapsedMs(p));
-    const chipEl = document.getElementById('chip_'+p.id);
-    if(chipEl) chipEl.innerHTML = '<span class="dot"></span>En curso ' + formatDuration(getElapsedMs(p));
-  });
+pieces.filter(p=>p.status==='en_progreso').forEach(p=>{
+const timerEl = document.getElementById('timer_'+p.id);
+if(timerEl) timerEl.textContent = formatDuration(getElapsedMs(p));
+const chipEl = document.getElementById('chip_'+p.id);
+if(chipEl) chipEl.innerHTML = '<span class="dot"></span>En curso ' + formatDuration(getElapsedMs(p));
+});
 }, 1000);
-
 /* ---------- acciones de pieza ---------- */
 async function startPiece(id){
-  const p = pieces.find(x=>x.id===id);
-  if(!p) return;
-  p.status = 'en_progreso';
-  p.startedAt = Date.now();
-  render();
-  await queueSave();
+const p = pieces.find(x=>x.id===id);
+if(!p) return;
+p.status = 'en_progreso';
+p.startedAt = Date.now();
+render();
+await queueSave();
 }
 async function pausePiece(id){
-  const p = pieces.find(x=>x.id===id);
-  if(!p) return;
-  p.accumulatedMs = getElapsedMs(p);
-  p.startedAt = null;
-  p.status = 'pausado';
-  render();
-  await queueSave();
+const p = pieces.find(x=>x.id===id);
+if(!p) return;
+p.accumulatedMs = getElapsedMs(p);
+p.startedAt = null;
+p.status = 'pausado';
+render();
+await queueSave();
 }
 async function finishPiece(id){
-  const p = pieces.find(x=>x.id===id);
-  if(!p) return;
-  p.accumulatedMs = getElapsedMs(p);
-  p.startedAt = null;
-  p.status = 'terminada';
-  p.totalMs = p.accumulatedMs;
-  p.finishedAt = Date.now();
-  if(openRowId===id) openRowId = null;
-  render();
-  await queueSave();
-  showToast('Pieza finalizada.');
+const p = pieces.find(x=>x.id===id);
+if(!p) return;
+p.accumulatedMs = getElapsedMs(p);
+p.startedAt = null;
+p.status = 'terminada';
+p.totalMs = p.accumulatedMs;
+p.finishedAt = Date.now();
+if(openRowId===id) openRowId = null;
+render();
+await queueSave();
+showToast('Pieza finalizada.');
 }
 async function reopenPiece(id){
-  const p = pieces.find(x=>x.id===id);
-  if(!p) return;
-  const active = getActiveSorted();
-  const maxOrder = active.length ? Math.max(...active.map(x=>x.order||0)) : -1;
-  p.status = 'pendiente';
-  p.accumulatedMs = 0;
-  p.startedAt = null;
-  p.finishedAt = null;
-  p.totalMs = null;
-  p.order = maxOrder + 1;
-  render();
-  await queueSave();
-  showToast('Pieza reabierta — vuelve a "Pendientes".');
+const p = pieces.find(x=>x.id===id);
+if(!p) return;
+const active = getActiveSorted(p.type||'pieza');
+const maxOrder = active.length ? Math.max(...active.map(x=>x.order||0)) : -1;
+p.status = 'pendiente';
+p.accumulatedMs = 0;
+p.startedAt = null;
+p.finishedAt = null;
+p.totalMs = null;
+p.order = maxOrder + 1;
+render();
+await queueSave();
+showToast('Pieza reabierta — vuelve a "Pendientes".');
 }
-
 /* ---------- ver PDF ---------- */
 function viewPdf(pieceId){
-  // se abre una pestaña en blanco YA (sincrónico), para que el navegador no
-  // bloquee el pop-up; recién después se completa con el archivo (async).
-  const newTab = window.open('', '_blank');
-  fetchAndShowPdf(pieceId, newTab);
+// se abre una pestaña en blanco YA (sincrónico), para que el navegador no
+// bloquee el pop-up; recién después se completa con el archivo (async).
+const newTab = window.open('', '_blank');
+fetchAndShowPdf(pieceId, newTab);
 }
 async function fetchAndShowPdf(pieceId, newTab){
-  try{
-    const res = await storageGet('pdf:'+pieceId);
-    if(!res || !res.value){ if(newTab) newTab.close(); showToast('No se encontró el PDF.', true); return; }
-    const stored = JSON.parse(res.value);
-    if(!stored || !stored.data){ if(newTab) newTab.close(); showToast('El archivo guardado está incompleto.', true); return; }
-    const blob = await (await fetch(stored.data)).blob();
-    const url = URL.createObjectURL(blob);
-    if(newTab && !newTab.closed) newTab.location.href = url;
-    else window.open(url, '_blank');
-  }catch(e){
-    if(newTab) newTab.close();
-    showToast('No se pudo abrir el PDF.', true, ()=> viewPdf(pieceId));
-  }
+try{
+const res = await storageGet('pdf:'+pieceId);
+if(!res || !res.value){ if(newTab) newTab.close(); showToast('No se encontró el PDF.', true); return; }
+const stored = JSON.parse(res.value);
+if(!stored || !stored.data){ if(newTab) newTab.close(); showToast('El archivo guardado está incompleto.', true); return; }
+const blob = await (await fetch(stored.data)).blob();
+const url = URL.createObjectURL(blob);
+if(newTab && !newTab.closed) newTab.location.href = url;
+else window.open(url, '_blank');
+}catch(e){
+if(newTab) newTab.close();
+showToast('No se pudo abrir el PDF.', true, ()=> viewPdf(pieceId));
 }
-
+}
 /* ---------- eliminar ---------- */
 async function deletePieceConfirm(id){
-  const ok = await askConfirm('¿Eliminar esta pieza de la lista?');
-  if(!ok) return;
-  const p = pieces.find(x=>x.id===id);
-  pieces = pieces.filter(x=>x.id!==id);
-  if(openRowId===id) openRowId=null;
-  render();
-  await queueSave();
-  if(p){
-    if(p.hasIcon) deleteFile('icon:'+p.id);
-    if(p.hasPdf) deleteFile('pdf:'+p.id);
-  }
-  showToast('Pieza eliminada.');
+const ok = await askConfirm('¿Eliminar esta pieza de la lista?');
+if(!ok) return;
+const p = pieces.find(x=>x.id===id);
+pieces = pieces.filter(x=>x.id!==id);
+if(openRowId===id) openRowId=null;
+render();
+await queueSave();
+if(p){
+if(p.hasIcon) deleteFile('icon:'+p.id);
+if(p.hasPdf) deleteFile('pdf:'+p.id);
 }
-
+showToast('Pieza eliminada.');
+}
 /* ---------- crear / editar pieza ---------- */
 function openCreateModal(){
-  if(isOperarioView) return;
-  editingPieceId = null;
-  document.getElementById('createModalTitle').textContent = 'Nueva pieza';
-  document.getElementById('submitPieceBtn').textContent = 'Agregar pieza';
-  document.getElementById('p-name').value = '';
-  document.getElementById('p-qty').value = '1';
-  pendingIcon = null;
-  pendingPdf = null;
-  pendingColor = null;
-  renderColorPicker(null);
-  document.getElementById('iconPreview').style.display = 'none';
-  document.getElementById('iconDropText').style.display = 'block';
-  document.getElementById('iconDrop').classList.remove('has-file');
-  document.getElementById('pdfDropText').textContent = '📎 Tocar para elegir PDF';
-  document.getElementById('pdfDrop').classList.remove('has-file');
-  document.getElementById('createOverlay').classList.add('open');
+if(isOperarioView) return;
+editingPieceId = null;
+document.getElementById('createModalTitle').textContent = 'Nueva pieza';
+document.getElementById('submitPieceBtn').textContent = 'Agregar pieza';
+document.getElementById('p-name').value = '';
+document.getElementById('p-qty').value = '1';
+pendingIcon = null;
+pendingPdf = null;
+pendingColor = null;
+renderColorPicker(null);
+document.getElementById('iconPreview').style.display = 'none';
+document.getElementById('iconDropText').style.display = 'block';
+document.getElementById('iconDrop').classList.remove('has-file');
+document.getElementById('pdfDropText').textContent = '📎 Tocar para elegir PDF';
+document.getElementById('pdfDrop').classList.remove('has-file');
+document.getElementById('createOverlay').classList.add('open');
 }
 function closeCreateModal(){
-  document.getElementById('createOverlay').classList.remove('open');
+document.getElementById('createOverlay').classList.remove('open');
 }
 function startEditPiece(id){
-  if(isOperarioView) return;
-  const p = pieces.find(x=>x.id===id);
-  if(!p) return;
-  editingPieceId = id;
-  document.getElementById('createModalTitle').textContent = 'Editar pieza';
-  document.getElementById('submitPieceBtn').textContent = 'Guardar cambios';
-  document.getElementById('p-name').value = p.name;
-  document.getElementById('p-qty').value = p.qty;
-  pendingIcon = null;
-  pendingPdf = null;
-  pendingColor = p.color || null;
-  renderColorPicker(pendingColor);
-  document.getElementById('iconPreview').style.display = 'none';
-  document.getElementById('iconDropText').style.display = 'block';
-  document.getElementById('iconDropText').textContent = p.hasIcon ? 'Tocar para reemplazar imagen' : 'Tocar para elegir imagen';
-  document.getElementById('iconDrop').classList.toggle('has-file', !!p.hasIcon);
-  document.getElementById('pdfDropText').textContent = p.hasPdf ? ('📎 ' + p.pdfName + ' — tocar para reemplazar') : '📎 Tocar para elegir PDF';
-  document.getElementById('pdfDrop').classList.toggle('has-file', !!p.hasPdf);
-  document.getElementById('createOverlay').classList.add('open');
+if(isOperarioView) return;
+const p = pieces.find(x=>x.id===id);
+if(!p) return;
+editingPieceId = id;
+document.getElementById('createModalTitle').textContent = 'Editar pieza';
+document.getElementById('submitPieceBtn').textContent = 'Guardar cambios';
+document.getElementById('p-name').value = p.name;
+document.getElementById('p-qty').value = p.qty;
+pendingIcon = null;
+pendingPdf = null;
+pendingColor = p.color || null;
+renderColorPicker(pendingColor);
+document.getElementById('iconPreview').style.display = 'none';
+document.getElementById('iconDropText').style.display = 'block';
+document.getElementById('iconDropText').textContent = p.hasIcon ? 'Tocar para reemplazar imagen' : 'Tocar para elegir imagen';
+document.getElementById('iconDrop').classList.toggle('has-file', !!p.hasIcon);
+document.getElementById('pdfDropText').textContent = p.hasPdf ? ('📎 ' + p.pdfName + ' — tocar para reemplazar') : '📎 Tocar para elegir PDF';
+document.getElementById('pdfDrop').classList.toggle('has-file', !!p.hasPdf);
+document.getElementById('createOverlay').classList.add('open');
 }
-
 function readFileAsDataUrl(file, cb){
-  const reader = new FileReader();
-  reader.onload = ev => cb(ev.target.result);
-  reader.readAsDataURL(file);
+const reader = new FileReader();
+reader.onload = ev => cb(ev.target.result);
+reader.readAsDataURL(file);
 }
 function handleIconPick(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev=>{
-    const img = new Image();
-    img.onload = ()=>{
-      const maxW = 160;
-      const scale = Math.min(1, maxW/img.width);
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width*scale; canvas.height = img.height*scale;
-      canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
-      pendingIcon = canvas.toDataURL('image/jpeg',0.7);
-      const prev = document.getElementById('iconPreview');
-      prev.src = pendingIcon; prev.style.display='block';
-      document.getElementById('iconDropText').style.display='none';
-      document.getElementById('iconDrop').classList.add('has-file');
-    };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+const file = e.target.files[0];
+if(!file) return;
+const reader = new FileReader();
+reader.onload = ev=>{
+const img = new Image();
+img.onload = ()=>{
+const maxW = 160;
+const scale = Math.min(1, maxW/img.width);
+const canvas = document.createElement('canvas');
+canvas.width = img.width*scale; canvas.height = img.height*scale;
+canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+pendingIcon = canvas.toDataURL('image/jpeg',0.7);
+const prev = document.getElementById('iconPreview');
+prev.src = pendingIcon; prev.style.display='block';
+document.getElementById('iconDropText').style.display='none';
+document.getElementById('iconDrop').classList.add('has-file');
+};
+img.src = ev.target.result;
+};
+reader.readAsDataURL(file);
 }
 function handlePdfPick(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  if(file.size > 650*1024){
-    showToast('Ese PDF pesa más de 650 KB (límite de Firestore), probá con uno más liviano.', true);
-    e.target.value=''; return;
-  }
-  readFileAsDataUrl(file, dataUrl=>{
-    pendingPdf = {name:file.name, data:dataUrl};
-    document.getElementById('pdfDropText').textContent = '📎 ' + file.name;
-    document.getElementById('pdfDrop').classList.add('has-file');
-  });
+const file = e.target.files[0];
+if(!file) return;
+if(file.size > 650*1024){
+showToast('Ese PDF pesa más de 650 KB (límite de Firestore), probá con uno más liviano.', true);
+e.target.value=''; return;
 }
-
-async function submitPiece(){
-  const name = document.getElementById('p-name').value.trim();
-  const qty = document.getElementById('p-qty').value.trim();
-  if(!name || !qty){ showToast('Completá el nombre y la cantidad.', true); return; }
-
-  if(editingPieceId){
-    const p = pieces.find(x=>x.id===editingPieceId);
-    if(!p) return;
-    p.name = name; p.qty = Number(qty); p.color = pendingColor;
-    const newIcon = pendingIcon, newPdf = pendingPdf;
-    if(newIcon){ p.hasIcon = true; iconCache[p.id] = newIcon; }
-    if(newPdf){ p.hasPdf = true; p.pdfName = newPdf.name; }
-    const pid = editingPieceId;
-    closeCreateModal();
-    render();
-    await queueSave();
-    if(newIcon) await setFile('icon:'+pid, newIcon);
-    if(newPdf) await setFile('pdf:'+pid, JSON.stringify(newPdf));
-    showToast('Pieza actualizada.');
-    return;
-  }
-
-  const active = getActiveSorted();
-  const maxOrder = active.length ? Math.max(...active.map(x=>x.order||0)) : -1;
-  const id = uid('pz');
-  const icon = pendingIcon, pdf = pendingPdf;
-  pieces.push({
-    id, name, qty:Number(qty), order:maxOrder+1, color: pendingColor,
-    hasIcon: !!icon, hasPdf: !!pdf, pdfName: pdf?pdf.name:null,
-    status:'pendiente', startedAt:null, accumulatedMs:0, finishedAt:null, totalMs:null,
-    createdAt: Date.now()
-  });
-  if(icon) iconCache[id] = icon;
-  closeCreateModal();
-  render();
-  await queueSave();
-  if(icon) await setFile('icon:'+id, icon);
-  if(pdf) await setFile('pdf:'+id, JSON.stringify(pdf));
-  showToast('Pieza agregada.');
-}
-
-Object.assign(window, {
-  openCreateModal, closeCreateModal, startEditPiece, handleIconPick, handlePdfPick, submitPiece,
-  startPiece, pausePiece, finishPiece, reopenPiece, viewPdf, deletePieceConfirm, toggleExpand,
-  addComment, removeComment
+readFileAsDataUrl(file, dataUrl=>{
+pendingPdf = {name:file.name, data:dataUrl};
+document.getElementById('pdfDropText').textContent = '📎 ' + file.name;
+document.getElementById('pdfDrop').classList.add('has-file');
 });
-
+}
+async function submitPiece(){
+const name = document.getElementById('p-name').value.trim();
+const qty = document.getElementById('p-qty').value.trim();
+if(!name || !qty){ showToast('Completá el nombre y la cantidad.', true); return; }
+if(editingPieceId){
+const p = pieces.find(x=>x.id===editingPieceId);
+if(!p) return;
+p.name = name; p.qty = Number(qty); p.color = pendingColor;
+const newIcon = pendingIcon, newPdf = pendingPdf;
+if(newIcon){ p.hasIcon = true; iconCache[p.id] = newIcon; }
+if(newPdf){ p.hasPdf = true; p.pdfName = newPdf.name; }
+const pid = editingPieceId;
+closeCreateModal();
+render();
+await queueSave();
+if(newIcon) await setFile('icon:'+pid, newIcon);
+if(newPdf) await setFile('pdf:'+pid, JSON.stringify(newPdf));
+showToast('Pieza actualizada.');
+return;
+}
+const active = getActiveSorted('pieza');
+const maxOrder = active.length ? Math.max(...active.map(x=>x.order||0)) : -1;
+const id = uid('pz');
+const icon = pendingIcon, pdf = pendingPdf;
+pieces.push({
+id, type:'pieza', name, qty:Number(qty), order:maxOrder+1, color: pendingColor,
+hasIcon: !!icon, hasPdf: !!pdf, pdfName: pdf?pdf.name:null,
+status:'pendiente', startedAt:null, accumulatedMs:0, finishedAt:null, totalMs:null,
+createdAt: Date.now()
+});
+if(icon) iconCache[id] = icon;
+closeCreateModal();
+render();
+await queueSave();
+if(icon) await setFile('icon:'+id, icon);
+if(pdf) await setFile('pdf:'+id, JSON.stringify(pdf));
+showToast('Pieza agregada.');
+}
+/* ---------- crear / editar trabajo extra ---------- */
+function openExtraModal(){
+editingExtraId = null;
+document.getElementById('extraModalTitle').textContent = 'Nuevo trabajo extra';
+document.getElementById('submitExtraBtn').textContent = 'Agregar trabajo extra';
+extraCategory = null;
+extraProcess = null;
+extraSolicitante = null;
+addingProcessInline = false;
+addingSolicitanteInline = false;
+document.getElementById('ex-qty').value = '1';
+document.getElementById('extraProcessField').style.display = 'none';
+renderExtraCategoryPicker();
+renderExtraProcessPicker();
+renderExtraSolicitantePicker();
+document.getElementById('extraOverlay').classList.add('open');
+}
+function closeExtraModal(){
+document.getElementById('extraOverlay').classList.remove('open');
+}
+function startEditExtra(id){
+const p = pieces.find(x=>x.id===id);
+if(!p) return;
+editingExtraId = id;
+document.getElementById('extraModalTitle').textContent = 'Editar trabajo extra';
+document.getElementById('submitExtraBtn').textContent = 'Guardar cambios';
+extraCategory = p.category;
+extraProcess = p.process || null;
+extraSolicitante = p.solicitante || null;
+addingProcessInline = false;
+addingSolicitanteInline = false;
+document.getElementById('ex-qty').value = p.qty;
+document.getElementById('extraProcessField').style.display = (extraCategory==='produccion') ? 'block' : 'none';
+renderExtraCategoryPicker();
+renderExtraProcessPicker();
+renderExtraSolicitantePicker();
+document.getElementById('extraOverlay').classList.add('open');
+}
+async function submitExtra(){
+if(!extraCategory){ showToast('Elegí el tipo de trabajo.', true); return; }
+if(extraCategory==='produccion' && !extraProcess){ showToast('Elegí el proceso.', true); return; }
+const qty = document.getElementById('ex-qty').value.trim();
+if(!qty){ showToast('Completá la cantidad.', true); return; }
+if(!extraSolicitante){ showToast('Elegí quién lo solicita.', true); return; }
+if(editingExtraId){
+const p = pieces.find(x=>x.id===editingExtraId);
+if(!p) return;
+p.category = extraCategory;
+p.process = extraCategory==='produccion' ? extraProcess : null;
+p.qty = Number(qty);
+p.solicitante = extraSolicitante;
+p.name = buildExtraName(p);
+closeExtraModal();
+render();
+await queueSave();
+showToast('Trabajo extra actualizado.');
+return;
+}
+const activeExtras = getActiveSorted('extra');
+const maxOrder = activeExtras.length ? Math.max(...activeExtras.map(x=>x.order||0)) : -1;
+const id = uid('ex');
+const piece = {
+id, type:'extra', category: extraCategory, process: extraCategory==='produccion' ? extraProcess : null,
+qty:Number(qty), solicitante: extraSolicitante, order:maxOrder+1, color:null,
+hasIcon:false, hasPdf:false, pdfName:null,
+status:'pendiente', startedAt:null, accumulatedMs:0, finishedAt:null, totalMs:null,
+createdAt: Date.now()
+};
+piece.name = buildExtraName(piece);
+pieces.push(piece);
+closeExtraModal();
+render();
+await queueSave();
+showToast('Trabajo extra agregado.');
+}
+Object.assign(window, {
+openCreateModal, closeCreateModal, startEditPiece, handleIconPick, handlePdfPick, submitPiece,
+startPiece, pausePiece, finishPiece, reopenPiece, viewPdf, deletePieceConfirm, toggleExpand,
+addComment, removeComment,
+openExtraModal, closeExtraModal, startEditExtra, submitExtra
+});
 loadPieces();
+loadExtraCatalog();
 </script>
 </body>
 </html>
