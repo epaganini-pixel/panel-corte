@@ -629,7 +629,7 @@ const isFinished = p.status==='terminada';
 const card = document.createElement('div');
 const statusClass = p.status==='en_progreso' ? 'running' : (p.status==='pausado' ? 'paused' : '');
 card.className = 'piece-card ' + statusClass + (openRowId===p.id ? ' expanded' : '');
-const draggableAllowed = (type==='extra' ? true : !isOperarioView) && !isFinished;
+const draggableAllowed = !isOperarioView && !isFinished;
 card.draggable = draggableAllowed;
 if(p.color) card.style.borderLeftColor = p.color;
 if(draggableAllowed){
