@@ -129,6 +129,7 @@ table tr:hover td{background:#fbf9f3;}
   <div class="sub">Aplicación local · el Excel original no se modifica · <span id="appVersion"></span></div>
 </header>
 <div id="libsBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
+<div id="storageBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
 
 <nav class="tabs" id="tabs">
   <button data-view="cargar" class="active">Cargar Excel</button>
@@ -219,7 +220,7 @@ table tr:hover td{background:#fbf9f3;}
     <div class="panel" id="panelRevisar" style="display:none;">
       <h2>Elementos a revisar manualmente</h2>
       <p class="muted">Celdas del Excel donde no se pudo identificar código de pieza con certeza, o cuya descripción quedó incompleta. No se inventaron datos: revisalas en el Excel original.</p>
-      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th><th>Motivo</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </section>
@@ -562,8 +563,15 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
           if (!descripcion) descripcion = '(sin descripción)';
 
           const { estado, planificada, realizada, pendiente } = Normalizer.determineEstado(info, cell.fill, legend, treatUncoloredAsPending);
+          // Si el color dice "parcial" o "en proceso" pero no hay forma de saber cuánto se hizo
+          // (no hay "X DE Y" en el texto), no se inventa un 0: se manda a revisar en vez de
+          // registrarlo con cantidades vacías (eso lo haría desaparecer silenciosamente de pendientes).
           if (planificada == null) {
-            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col] });
+            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col], motivo: 'no se detectó ninguna cantidad ("x_") en el texto' });
+            continue;
+          }
+          if ((estado === 'PARCIAL' || estado === 'EN_PROCESO') && realizada == null) {
+            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col], motivo: `la celda está coloreada como "${estado === 'PARCIAL' ? 'realizado parcialmente' : 'en proceso'}" pero el texto no dice cuánto se hizo (falta "X DE Y")` });
             continue;
           }
           records.push({
@@ -654,7 +662,15 @@ const Store = {
       return data;
     } catch (e) { return { semanas: [], manualEntries: [] }; }
   },
-  save(data) { localStorage.setItem(this.KEY, JSON.stringify(data)); },
+  save(data) {
+    const json = JSON.stringify(data);
+    try {
+      localStorage.setItem(this.KEY, json);
+    } catch (e) {
+      throw new Error('El almacenamiento del navegador está lleno (no se pudo guardar). Hacé una copia de seguridad desde Configuración, borrá alguna semana vieja del histórico y volvé a intentar.');
+    }
+    updateStorageBanner(json.length);
+  },
   loadConfig() {
     try {
       return JSON.parse(localStorage.getItem(this.CONFIG_KEY)) || defaultConfig();
@@ -694,6 +710,26 @@ const Store = {
     return data.semanas.flatMap(w => w.records).concat(data.manualEntries);
   }
 };
+
+/** Chequea cuánto localStorage se está usando y avisa antes de que se llene.
+ *  El límite típico por sitio ronda los 5 MB (varía según navegador); avisamos
+ *  a partir de ~70% para dar tiempo a hacer una copia de seguridad. */
+const STORAGE_WARN_BYTES = 3.5 * 1024 * 1024;
+const STORAGE_LIMIT_ESTIMATE = 5 * 1024 * 1024;
+function updateStorageBanner(knownBytes) {
+  const banner = document.getElementById('storageBanner');
+  if (!banner) return;
+  const bytes = knownBytes != null ? knownBytes : (localStorage.getItem(Store.KEY) || '').length;
+  const mb = (bytes / (1024 * 1024)).toFixed(1);
+  const pct = Math.min(100, Math.round(bytes / STORAGE_LIMIT_ESTIMATE * 100));
+  if (bytes >= STORAGE_WARN_BYTES) {
+    banner.style.display = 'block';
+    banner.innerHTML = `El histórico guardado en este navegador ya ocupa <b>${mb} MB</b> (~${pct}% de lo que suelen permitir los navegadores). ` +
+      `Te conviene descargar una copia de seguridad desde <b>Configuración</b> y borrar alguna semana vieja que ya no necesites, para no arriesgarte a quedarte sin espacio.`;
+  } else {
+    banner.style.display = 'none';
+  }
+}
 
 function defaultConfig() {
   return {
@@ -931,7 +967,7 @@ function renderDashboard() {
   if (App.currentWeekRevisar && App.currentWeekRevisar.length) {
     revisarPanel.style.display = 'block';
     document.querySelector('#tblRevisar tbody').innerHTML = App.currentWeekRevisar.map(x =>
-      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td></tr>`).join('');
+      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td><td>${escapeHtml(x.motivo || '')}</td></tr>`).join('');
   } else {
     revisarPanel.style.display = 'none';
   }
@@ -1300,7 +1336,7 @@ document.getElementById('restoreInput').addEventListener('change', async e => {
   } catch (err) { alert('No se pudo restaurar: ' + err.message); }
 });
 document.getElementById('btnClearAll').addEventListener('click', () => {
-  if (confirm('Esto borra TODO el histórico guardado en esta PC. ¿Continuar?')) { Store.save({ semanas: [] }); renderDashboard(); renderHistoricoView(); }
+  if (confirm('Esto borra TODO el histórico guardado en esta PC. ¿Continuar?')) { Store.save({ semanas: [], manualEntries: [] }); renderDashboard(); renderHistoricoView(); }
 });
 
 /* ---------------------- 7. EXPORTACIÓN ---------------------- */
@@ -1380,7 +1416,7 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v8 · estética AXIONLIFT (crema + naranja) con logo';
+const APP_VERSION = 'v9 · aviso automático de espacio en el navegador';
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 const libsBanner = document.getElementById('libsBanner');
@@ -1397,6 +1433,7 @@ window.__libsReady.then(({ excelOk, chartOk }) => {
 });
 
 renderDashboard();
+updateStorageBanner();
 </script>
 </body>
 </html>
