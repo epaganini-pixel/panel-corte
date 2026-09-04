@@ -103,6 +103,13 @@ table tr:hover td{background:#f7fafb;}
 .quicklinks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
 .detail-card{background:#fbfcfd;border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:8px;}
 .footer-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:20px;}
+.modal-overlay{position:fixed;inset:0;background:rgba(20,30,38,.55);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.modal-box{background:#fff;border-radius:8px;padding:22px;max-width:460px;width:92%;max-height:88vh;overflow:auto;}
+.modal-box h3{margin-top:0;color:var(--accent);font-size:15px;}
+.modal-box label{display:block;font-size:12.5px;margin:10px 0 4px;color:var(--muted);}
+.modal-box input[type=text],.modal-box input[type=number]{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+.modal-box .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
+.link-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;padding:2px 6px;text-decoration:underline;}
 </style>
 </head>
 <body>
@@ -248,6 +255,15 @@ table tr:hover td{background:#f7fafb;}
     <div class="quicklinks" id="historicoQuestions"></div>
     <div id="historicoAnswer"></div>
   </div>
+
+  <div class="panel" id="panelManuales" style="display:none;">
+    <h2>Faltantes marcados como terminados a mano</h2>
+    <p class="muted">Registros cargados desde "Marcar como terminado", sin venir de ningún Excel. Se pueden deshacer.</p>
+    <div class="table-wrap">
+      <table><thead><tr><th>Código</th><th>WO</th><th>Semana</th><th>Cantidad</th><th>Operario</th><th>Observaciones</th><th>Registrado</th><th></th></tr></thead>
+        <tbody id="tblManuales"></tbody></table>
+    </div>
+  </div>
 </section>
 
 <!-- ============ VISTA: BÚSQUEDA ============ -->
@@ -288,6 +304,7 @@ table tr:hover td{background:#f7fafb;}
 </section>
 
 </main>
+<div id="modalRoot"></div>
 <div class="footer-note">Los datos se calculan de forma determinística a partir del Excel — no se generan cifras ficticias.</div>
 
 <script>
@@ -623,8 +640,12 @@ const Store = {
   KEY: 'soldadura_historico_v1',
   CONFIG_KEY: 'soldadura_config_v1',
   load() {
-    try { return JSON.parse(localStorage.getItem(this.KEY)) || { semanas: [] }; }
-    catch (e) { return { semanas: [] }; }
+    try {
+      const data = JSON.parse(localStorage.getItem(this.KEY)) || {};
+      if (!data.semanas) data.semanas = [];
+      if (!data.manualEntries) data.manualEntries = []; // faltantes marcados como terminados a mano (no vienen de un Excel)
+      return data;
+    } catch (e) { return { semanas: [], manualEntries: [] }; }
   },
   save(data) { localStorage.setItem(this.KEY, JSON.stringify(data)); },
   loadConfig() {
@@ -647,8 +668,23 @@ const Store = {
     data.semanas = data.semanas.filter(w => w.id !== weekId);
     this.save(data);
   },
+  /** Registra que un pendiente se completó "fuera de planilla" (no se volvió a cargar en ningún Excel).
+   *  Se guarda como un registro más, aparte de las semanas reales, para no alterar lo que dice el Excel. */
+  addManualCompletion(entry) {
+    const data = this.load();
+    const record = { ...entry, id: 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), origen: 'manual', registrado: new Date().toISOString() };
+    data.manualEntries.push(record);
+    this.save(data);
+    return record;
+  },
+  removeManualEntry(id) {
+    const data = this.load();
+    data.manualEntries = data.manualEntries.filter(e => e.id !== id);
+    this.save(data);
+  },
   allRecords() {
-    return this.load().semanas.flatMap(w => w.records);
+    const data = this.load();
+    return data.semanas.flatMap(w => w.records).concat(data.manualEntries);
   }
 };
 
@@ -958,14 +994,70 @@ document.addEventListener('click', e => {
   if (btn) doExport(btn.dataset.export);
 });
 
+/* ---------------------- Modal: marcar pendiente como terminado ---------------------- */
+function openResolveModal(item) {
+  const suggestedSemana = suggestNextSemana(item.anio, item.semana);
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>Marcar como terminado</h3>
+        <p class="muted"><b>${item.codigo}</b> — ${escapeHtml(item.descripcion || '')}<br>WO: ${item.wo || '(sin WO)'} · Puesto original: ${item.puesto} · Pendiente actual: ${item.cantidad_pendiente}</p>
+        <p class="muted">Usá esto cuando el trabajo se completó pero no quedó cargado en ningún Excel. Se guarda como un registro aparte, sin tocar los datos que sí vinieron del Excel.</p>
+        <label>Cantidad realizada ahora</label>
+        <input type="number" id="rmCantidad" value="${item.cantidad_pendiente}" min="0" step="1">
+        <label>Semana en la que se completó</label>
+        <input type="text" id="rmSemana" value="${suggestedSemana.semana}" placeholder="Ej: W38">
+        <label>Año</label>
+        <input type="number" id="rmAnio" value="${suggestedSemana.anio}">
+        <label>Operario que lo realizó</label>
+        <input type="text" id="rmOperario" value="${escapeHtml(item.operario || '')}">
+        <label>Observaciones (opcional)</label>
+        <input type="text" id="rmObs" placeholder="Ej: se terminó fuera de planilla, avisado por el operario">
+        <div class="modal-actions">
+          <button class="btn secondary small" id="rmCancel">Cancelar</button>
+          <button class="btn small" id="rmConfirm">Guardar</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('rmCancel').onclick = closeModal;
+  document.getElementById('modalOverlay').onclick = e => { if (e.target.id === 'modalOverlay') closeModal(); };
+  document.getElementById('rmConfirm').onclick = () => {
+    const cantidad = parseFloat(document.getElementById('rmCantidad').value) || 0;
+    const semana = document.getElementById('rmSemana').value.trim().toUpperCase() || suggestedSemana.semana;
+    const anio = parseInt(document.getElementById('rmAnio').value) || suggestedSemana.anio;
+    const operario = document.getElementById('rmOperario').value.trim() || item.operario;
+    const obs = document.getElementById('rmObs').value.trim();
+    const restante = Math.max((item.cantidad_pendiente || 0) - cantidad, 0);
+    Store.addManualCompletion({
+      anio, semana, dia: '(manual)', turno: '', puesto: item.puesto, operario,
+      codigo: item.codigo, wo: item.wo, descripcion: item.descripcion,
+      cantidad_planificada: item.cantidad_pendiente, cantidad_realizada: cantidad, cantidad_pendiente: restante,
+      estado: restante <= 0 ? 'TERMINADO' : 'PARCIAL', observaciones: obs,
+      colorDetectado: null, celda: '(manual)', hoja: '(registro manual)'
+    });
+    closeModal();
+    // refresca la vista donde se abrió el modal
+    if (document.getElementById('view-pendientes').classList.contains('active')) drawPendientesTable();
+    if (document.getElementById('view-historico').classList.contains('active')) renderHistoricoQuestions();
+  };
+}
+function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+/** Sugiere la semana siguiente a la última conocida (simple +1; el usuario la puede editar). */
+function suggestNextSemana(anio, semana) {
+  const n = parseInt((semana || 'W0').replace(/\D/g, '')) || 0;
+  return { semana: 'W' + (n + 1), anio: anio || new Date().getFullYear() };
+}
+
 /* ---------------------- UI: Pendientes ---------------------- */
 function renderPendientesView() {
   const data = Store.load();
   const sel = document.getElementById('pendWeekSelect');
-  sel.innerHTML = `<option value="__ALL__">Todas las semanas guardadas</option>` +
+  sel.innerHTML = `<option value="__ACTUAL__">Pendientes actuales (consolidado por código + WO)</option>` +
+    `<option value="__ALL__">Todas las apariciones históricas (sin consolidar)</option>` +
     data.semanas.slice().sort((a, b) => weekSortKey({ semana: b.semana, anio: b.anio }) - weekSortKey({ semana: a.semana, anio: a.anio }))
-      .map(w => `<option value="${w.id}">${w.semana} (${w.anio})</option>`).join('');
-  sel.value = App.currentWeekId || '__ALL__';
+      .map(w => `<option value="${w.id}">Sólo semana ${w.semana} (${w.anio})</option>`).join('');
+  sel.value = '__ACTUAL__';
   sel.onchange = () => drawPendientesTable();
   document.getElementById('pendFilter').oninput = () => drawPendientesTable();
   drawPendientesTable();
@@ -973,15 +1065,47 @@ function renderPendientesView() {
 function drawPendientesTable() {
   const data = Store.load();
   const weekId = document.getElementById('pendWeekSelect').value;
-  let records = weekId === '__ALL__' ? Store.allRecords() : (data.semanas.find(w => w.id === weekId) || { records: [] }).records;
-  let pend = records.filter(r => (r.cantidad_pendiente || 0) > 0);
   const filter = document.getElementById('pendFilter').value.trim().toLowerCase();
-  if (filter) pend = pend.filter(r => [r.codigo, r.wo, r.operario, r.puesto].join(' ').toLowerCase().includes(filter));
-  document.querySelector('#tblPendientes tbody').innerHTML = pend.map(r =>
-    `<tr><td>${r.codigo}</td><td>${escapeHtml(r.descripcion)}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.operario}</td>
+  const thead = document.querySelector('#tblPendientes thead');
+  const tbody = document.querySelector('#tblPendientes tbody');
+
+  if (weekId === '__ACTUAL__') {
+    thead.innerHTML = `<tr><th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Última semana</th><th>Estado</th><th></th></tr>`;
+    const map = Calc.estadoActualPorWO(Store.allRecords());
+    let items = [...map.values()].map(e => e.ultimo).filter(r => (r.cantidad_pendiente || 0) > 0);
+    if (filter) items = items.filter(r => [r.codigo, r.wo, r.operario, r.puesto].join(' ').toLowerCase().includes(filter));
+    items.sort((a, b) => b.cantidad_pendiente - a.cantidad_pendiente);
+    tbody.innerHTML = items.map(r => rowHtmlConsolidado(r)).join('') ||
+      `<tr><td colspan="11" class="muted" style="text-align:center;padding:20px;">No hay pendientes actuales.</td></tr>`;
+    wireResolveButtons();
+  } else {
+    thead.innerHTML = `<tr><th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Semana</th><th>Estado</th></tr>`;
+    let records = weekId === '__ALL__' ? Store.allRecords() : (data.semanas.find(w => w.id === weekId) || { records: [] }).records;
+    let pend = records.filter(r => (r.cantidad_pendiente || 0) > 0);
+    if (filter) pend = pend.filter(r => [r.codigo, r.wo, r.operario, r.puesto].join(' ').toLowerCase().includes(filter));
+    tbody.innerHTML = pend.map(r =>
+      `<tr><td>${r.codigo}</td><td>${escapeHtml(r.descripcion)}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.operario}</td>
+       <td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td>${r.semana} (${r.anio})</td>
+       <td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`).join('') ||
+      `<tr><td colspan="10" class="muted" style="text-align:center;padding:20px;">Sin pendientes para este filtro.</td></tr>`;
+  }
+}
+function rowHtmlConsolidado(r) {
+  const key = encodeURIComponent(r.codigo + '|' + (r.wo || ''));
+  return `<tr><td>${r.codigo}</td><td>${escapeHtml(r.descripcion)}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.operario}</td>
      <td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td>${r.semana} (${r.anio})</td>
-     <td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`).join('') ||
-    `<tr><td colspan="10" class="muted" style="text-align:center;padding:20px;">Sin pendientes para este filtro.</td></tr>`;
+     <td><span class="badge ${r.estado}">${r.estado}</span></td>
+     <td><button class="link-btn" data-resolve-key="${key}">Marcar como terminado</button></td></tr>`;
+}
+function wireResolveButtons() {
+  const map = Calc.estadoActualPorWO(Store.allRecords());
+  document.querySelectorAll('[data-resolve-key]').forEach(btn => {
+    btn.onclick = () => {
+      const key = decodeURIComponent(btn.dataset.resolveKey);
+      const entry = map.get(key);
+      if (entry) openResolveModal(entry.ultimo);
+    };
+  });
 }
 
 /* ---------------------- UI: Histórico ---------------------- */
@@ -1011,6 +1135,25 @@ function renderHistoricoView() {
   });
 
   renderHistoricoQuestions();
+  renderManualEntries();
+}
+
+function renderManualEntries() {
+  const data = Store.load();
+  const panel = document.getElementById('panelManuales');
+  const tbody = document.getElementById('tblManuales');
+  if (!data.manualEntries.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  tbody.innerHTML = data.manualEntries.slice().sort((a, b) => new Date(b.registrado) - new Date(a.registrado)).map(e =>
+    `<tr><td>${e.codigo}</td><td>${e.wo || ''}</td><td>${e.semana} (${e.anio})</td><td>${e.cantidad_realizada}</td><td>${e.operario}</td>
+     <td>${escapeHtml(e.observaciones || '')}</td><td>${new Date(e.registrado).toLocaleDateString('es-AR')}</td>
+     <td><button class="link-btn" data-undo="${e.id}">Deshacer</button></td></tr>`).join('');
+  tbody.querySelectorAll('[data-undo]').forEach(b => b.onclick = () => {
+    if (confirm('¿Deshacer este registro manual? El código volverá a figurar como pendiente.')) {
+      Store.removeManualEntry(b.dataset.undo);
+      renderHistoricoView();
+    }
+  });
 }
 
 function renderHistoricoQuestions() {
@@ -1026,6 +1169,7 @@ function renderHistoricoQuestions() {
   box.innerHTML = qs.map((q, i) => `<button class="btn secondary small" data-q="${i}">${q[0]}</button>`).join('');
   box.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
     document.getElementById('historicoAnswer').innerHTML = qs[parseInt(b.dataset.q)][1]();
+    wireResolveButtons();
   });
 }
 
@@ -1034,8 +1178,9 @@ function q_pendientesActuales() {
   const rows = [...map.values()].filter(e => (e.ultimo.cantidad_pendiente || 0) > 0).map(e => e.ultimo)
     .sort((a, b) => b.cantidad_pendiente - a.cantidad_pendiente);
   if (!rows.length) return '<p class="muted">No hay códigos con pendiente en su última aparición registrada.</p>';
-  return tableHtml(['Código', 'Descripción', 'WO', 'Pendiente', 'Última semana', 'Puesto', 'Operario'],
-    rows.map(r => [r.codigo, r.descripcion, r.wo, r.cantidad_pendiente, r.semana + ' (' + r.anio + ')', r.puesto, r.operario]));
+  return `<div class="table-wrap" style="margin-top:10px;"><table><thead><tr>
+    <th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Última semana</th><th>Estado</th><th></th>
+    </tr></thead><tbody>${rows.map(rowHtmlConsolidado).join('')}</tbody></table></div>`;
 }
 function q_pendientesRecurrentes() {
   const map = Calc.estadoActualPorWO(Store.allRecords());
@@ -1102,8 +1247,8 @@ function doSearch() {
       <div style="margin:6px 0;">${semanas.map(s => `<span class="pill">${s}</span>`).join('')}</div>
       <div class="muted">Puestos: ${puestos.join(', ')} · Operarios: ${operarios.join(', ')}</div>
       <div class="muted">Planificado total: ${totalPlan} · Realizado: ${totalReal} · Pendiente: ${totalPend}</div>
-      ${tableHtml(['Semana', 'Día', 'WO', 'Puesto', 'Operario', 'Plan.', 'Real.', 'Pend.', 'Estado'],
-        recs.sort((a, b) => weekSortKey(a) - weekSortKey(b)).map(r => [r.semana + "'" + r.anio, r.dia, r.wo, r.puesto, r.operario, r.cantidad_planificada, r.cantidad_realizada, r.cantidad_pendiente, r.estado]))}
+      ${tableHtml(['Semana', 'Día', 'WO', 'Puesto', 'Operario', 'Plan.', 'Real.', 'Pend.', 'Estado', 'Origen'],
+        recs.sort((a, b) => weekSortKey(a) - weekSortKey(b)).map(r => [r.semana + "'" + r.anio, r.dia, r.wo, r.puesto, r.operario, r.cantidad_planificada, r.cantidad_realizada, r.cantidad_pendiente, r.estado, r.origen === 'manual' ? 'Registro manual' : 'Excel']))}
     </div>`;
   }
   box.innerHTML = html;
@@ -1228,7 +1373,7 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v6 · carga de librerías compatible con seguridad corporativa + versión de Chart.js corregida';
+const APP_VERSION = 'v7 · seguimiento de pendientes entre semanas + marcar como terminado a mano';
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 const libsBanner = document.getElementById('libsBanner');
