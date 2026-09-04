@@ -779,6 +779,9 @@ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':
 function toggleExpand(id){
 openRowId = (openRowId===id) ? null : id;
 renderActiveList();
+renderFinishedList();
+renderExtraActiveList();
+renderExtraFinishedList();
 }
 /* ---------- cronómetro (tick cada 1s) ---------- */
 setInterval(()=>{
