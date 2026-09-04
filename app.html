@@ -4,35 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seguimiento de Producción — SOLDADURA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
-// Carga de librerías con reintento en un segundo CDN por si el primero falla
-// (bloqueo de red corporativo, adblock, URL caída, etc.) en vez de fallar en silencio.
-function loadScriptWithFallback(urls, globalName, onDone) {
-  let i = 0;
-  function tryNext() {
-    if (i >= urls.length) { onDone(false); return; }
-    const url = urls[i++];
-    const s = document.createElement('script');
-    s.src = url;
-    s.onload = () => {
-      if (window[globalName]) onDone(true); else tryNext();
-    };
-    s.onerror = tryNext;
-    document.head.appendChild(s);
-  }
-  tryNext();
+// Las dos librerías de arriba se cargan con <script src> normal (es el método que
+// funciona incluso en redes/PCs con seguridad más estricta que bloquea scripts
+// insertados dinámicamente). Sólo si por algún motivo no llegaron a definirse,
+// se intenta UNA VEZ un CDN alternativo como respaldo.
+function loadScriptFallback(url, globalName, onDone) {
+  const s = document.createElement('script');
+  s.src = url;
+  s.onload = () => onDone(!!window[globalName]);
+  s.onerror = () => onDone(false);
+  document.head.appendChild(s);
 }
 window.__libsReady = new Promise(resolve => {
-  let excelOk = false, chartOk = false;
+  let excelOk = null, chartOk = null;
   const check = () => { if (excelOk !== null && chartOk !== null) resolve({ excelOk, chartOk }); };
-  loadScriptWithFallback([
-    'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
-    'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'
-  ], 'ExcelJS', ok => { excelOk = ok; check(); });
-  loadScriptWithFallback([
-    'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'
-  ], 'Chart', ok => { chartOk = ok; check(); });
+  setTimeout(() => { // da tiempo a que terminen de bajar los <script src> del <head>
+    if (typeof ExcelJS !== 'undefined') { excelOk = true; check(); }
+    else loadScriptFallback('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js', 'ExcelJS', ok => { excelOk = ok; check(); });
+
+    if (typeof Chart !== 'undefined') { chartOk = true; check(); }
+    else loadScriptFallback('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js', 'Chart', ok => { chartOk = ok; check(); });
+  }, 50);
 });
 </script>
 <style>
@@ -1233,7 +1228,7 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v5 · CDN de gráficos corregido + respaldo automático de CDN';
+const APP_VERSION = 'v6 · carga de librerías compatible con seguridad corporativa + versión de Chart.js corregida';
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 const libsBanner = document.getElementById('libsBanner');
