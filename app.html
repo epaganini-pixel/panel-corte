@@ -220,7 +220,7 @@ table tr:hover td{background:#fbf9f3;}
     <div class="panel" id="panelRevisar" style="display:none;">
       <h2>Elementos a revisar manualmente</h2>
       <p class="muted">Celdas del Excel donde no se pudo identificar código de pieza con certeza, o cuya descripción quedó incompleta. No se inventaron datos: revisalas en el Excel original.</p>
-      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th><th>Motivo</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </section>
@@ -563,15 +563,8 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
           if (!descripcion) descripcion = '(sin descripción)';
 
           const { estado, planificada, realizada, pendiente } = Normalizer.determineEstado(info, cell.fill, legend, treatUncoloredAsPending);
-          // Si el color dice "parcial" o "en proceso" pero no hay forma de saber cuánto se hizo
-          // (no hay "X DE Y" en el texto), no se inventa un 0: se manda a revisar en vez de
-          // registrarlo con cantidades vacías (eso lo haría desaparecer silenciosamente de pendientes).
           if (planificada == null) {
-            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col], motivo: 'no se detectó ninguna cantidad ("x_") en el texto' });
-            continue;
-          }
-          if ((estado === 'PARCIAL' || estado === 'EN_PROCESO') && realizada == null) {
-            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col], motivo: `la celda está coloreada como "${estado === 'PARCIAL' ? 'realizado parcialmente' : 'en proceso'}" pero el texto no dice cuánto se hizo (falta "X DE Y")` });
+            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col] });
             continue;
           }
           records.push({
@@ -967,7 +960,7 @@ function renderDashboard() {
   if (App.currentWeekRevisar && App.currentWeekRevisar.length) {
     revisarPanel.style.display = 'block';
     document.querySelector('#tblRevisar tbody').innerHTML = App.currentWeekRevisar.map(x =>
-      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td><td>${escapeHtml(x.motivo || '')}</td></tr>`).join('');
+      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td></tr>`).join('');
   } else {
     revisarPanel.style.display = 'none';
   }
