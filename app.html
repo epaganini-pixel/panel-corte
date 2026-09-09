@@ -135,6 +135,8 @@ table tr:hover td{background:#fbf9f3;}
   <button data-view="cargar" class="active">Cargar Excel</button>
   <button data-view="dashboard">Dashboard semanal</button>
   <button data-view="pendientes">Pendientes</button>
+  <button data-view="cruce">Cruce NetSuite</button>
+  <button data-view="operarios">Operarios</button>
   <button data-view="historico">Histórico</button>
   <button data-view="busqueda">Búsqueda</button>
   <button data-view="config">Configuración</button>
@@ -220,7 +222,7 @@ table tr:hover td{background:#fbf9f3;}
     <div class="panel" id="panelRevisar" style="display:none;">
       <h2>Elementos a revisar manualmente</h2>
       <p class="muted">Celdas del Excel donde no se pudo identificar código de pieza con certeza, o cuya descripción quedó incompleta. No se inventaron datos: revisalas en el Excel original.</p>
-      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap"><table id="tblRevisar"><thead><tr><th>Celda</th><th>Texto original</th><th>Puesto</th><th>Día</th><th>Motivo</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </section>
@@ -239,6 +241,104 @@ table tr:hover td{background:#fbf9f3;}
         <thead><tr><th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Semana</th><th>Estado</th></tr></thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VISTA: CRUCE NETSUITE ============ -->
+<section class="view" id="view-cruce">
+  <div class="panel">
+    <h2>Cruzar Excel semanal contra NetSuite</h2>
+    <p class="muted">Cargá el Excel semanal (el pintado, tal como lo usa el planificador) y el Excel crudo exportado de NetSuite de esa misma semana. La app cruza código + WO + puesto y arma un listado de diferencias — en particular, qué se pintó como hecho en la planilla pero todavía no se declaró en NetSuite.</p>
+    <div class="charts-grid">
+      <div>
+        <h3>1. Excel semanal (pintado)</h3>
+        <div class="dropzone" id="dzExcelSemanal" style="padding:26px 14px;">
+          <p style="font-weight:700;color:var(--ink);" id="dzExcelSemanalLabel">Arrastrar o seleccionar</p>
+          <button class="btn secondary small" id="btnSelectExcelSemanal">Seleccionar archivo</button>
+          <input type="file" id="fileExcelSemanal" accept=".xlsx,.xlsm" style="display:none;">
+        </div>
+        <div class="status-line" id="statusExcelSemanal"></div>
+      </div>
+      <div>
+        <h3>2. Excel NetSuite (crudo)</h3>
+        <div class="dropzone" id="dzExcelNetsuite" style="padding:26px 14px;">
+          <p style="font-weight:700;color:var(--ink);" id="dzExcelNetsuiteLabel">Arrastrar o seleccionar</p>
+          <button class="btn secondary small" id="btnSelectExcelNetsuite">Seleccionar archivo</button>
+          <input type="file" id="fileExcelNetsuite" accept=".xlsx,.xlsm" style="display:none;">
+        </div>
+        <div class="status-line" id="statusExcelNetsuite"></div>
+      </div>
+    </div>
+    <div class="export-row">
+      <button class="btn" id="btnCruzar" disabled>Cargar / Cruzar</button>
+      <span class="muted" id="cruceHint">Cargá los dos archivos para habilitar el cruce.</span>
+    </div>
+  </div>
+
+  <div id="cruceResultados" style="display:none;">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <h2 style="border:none;margin:0;">Resultado del cruce — semana <span id="cruceSemanaLabel"></span></h2>
+        <div class="export-row" style="margin:0;">
+          <button class="btn secondary small" id="btnGuardarCruce">Guardar en historial de operarios</button>
+          <button class="btn secondary small" id="btnExportarCruce">Exportar diferencias</button>
+        </div>
+      </div>
+      <div class="kpi-grid" id="cruceKpis"></div>
+    </div>
+
+    <div class="panel">
+      <h2 style="color:var(--bad);">⚠ Pendientes a declarar</h2>
+      <p class="muted">Está pintado como hecho (total o parcial) en el Excel semanal, pero en NetSuite figura con menos cantidad declarada (o nada). Hay que ir a declararlo.</p>
+      <div class="table-wrap"><table id="tblPendDeclarar"><thead><tr><th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Realizado en Excel</th><th>Declarado en NetSuite</th><th>Diferencia</th></tr></thead><tbody></tbody></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Otras diferencias</h2>
+      <div class="quicklinks" id="cruceOtrasTabs"></div>
+      <div id="cruceOtrasContenido"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VISTA: OPERARIOS ============ -->
+<section class="view" id="view-operarios">
+  <div class="panel">
+    <h2>Buscar operario</h2>
+    <div class="toolbar">
+      <select id="operarioSelect"><option value="">Elegí un operario...</option></select>
+    </div>
+  </div>
+  <div id="operarioDetalle" style="display:none;">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;">
+        <h2 id="operarioNombre" style="border:none;margin:0;"></h2>
+        <div class="export-row" style="margin:0;"><button class="btn secondary small" id="btnEditarPerfil">Editar perfil</button></div>
+      </div>
+      <div id="operarioPerfilView" class="muted"></div>
+      <div id="operarioPerfilForm" style="display:none;margin-top:10px;">
+        <label class="muted" style="display:block;margin:8px 0 3px;">Legajo</label>
+        <input type="text" id="opLegajo" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;">
+        <label class="muted" style="display:block;margin:8px 0 3px;">Turno habitual</label>
+        <input type="text" id="opTurno" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;">
+        <label class="muted" style="display:block;margin:8px 0 3px;">Observaciones</label>
+        <input type="text" id="opNotas" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;">
+        <div class="export-row"><button class="btn small" id="btnGuardarPerfil">Guardar</button></div>
+      </div>
+      <div class="kpi-grid" id="operarioKpis" style="margin-top:14px;"></div>
+    </div>
+    <div class="panel">
+      <h2>Cumplimiento por semana</h2>
+      <div class="chart-box"><canvas id="chartOperarioEvolucion"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Pendientes a declarar detectados (histórico de cruces)</h2>
+      <div class="table-wrap"><table id="tblOperarioDeclarar"><thead><tr><th>Código</th><th>WO</th><th>Semana</th><th>Excel</th><th>NetSuite</th><th>Diferencia</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>Trabajos registrados</h2>
+      <div class="table-wrap"><table id="tblOperarioTrabajos"><thead><tr><th>Semana</th><th>Código</th><th>WO</th><th>Puesto</th><th>Planificada</th><th>Realizada</th><th>Pendiente</th><th>Estado</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </section>
@@ -297,6 +397,11 @@ table tr:hover td{background:#fbf9f3;}
       <input type="checkbox" id="chkUncoloredPending" checked>
       Tratar las celdas sin color asignado (y sin "X DE Y" en el texto) como <b>PENDIENTE</b> (no realizado). Si lo destildás, se marcarán como "PLANIFICADO" sin cantidad realizada/pendiente definida.
     </label>
+  </div>
+  <div class="panel">
+    <h2>Mapeo de puestos ↔ centros de trabajo de NetSuite</h2>
+    <p class="muted">Usado por la pestaña "Cruce NetSuite". Se auto-detecta a partir de los códigos entre paréntesis de cada puesto (ej. "S-01 / (WMX)"). Si algún puesto no cruza bien (por ejemplo si en NetSuite el centro se llama distinto, o si un puesto como "WMK" no existe como centro propio en NetSuite), escribilo acá — podés poner más de un centro separado por coma.</p>
+    <div id="puestoMappingEditor"></div>
     <button class="btn small" id="btnSaveConfig" style="margin-top:12px;">Guardar configuración</button>
   </div>
   <div class="panel">
@@ -563,8 +668,15 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
           if (!descripcion) descripcion = '(sin descripción)';
 
           const { estado, planificada, realizada, pendiente } = Normalizer.determineEstado(info, cell.fill, legend, treatUncoloredAsPending);
+          // Si el color dice "parcial" o "en proceso" pero no hay forma de saber cuánto se hizo
+          // (no hay "X DE Y" en el texto), no se inventa un 0: se manda a revisar en vez de
+          // registrarlo con cantidades vacías (eso lo haría desaparecer silenciosamente de pendientes).
           if (planificada == null) {
-            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col] });
+            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col], motivo: 'no se detectó ninguna cantidad ("x_") en el texto' });
+            continue;
+          }
+          if ((estado === 'PARCIAL' || estado === 'EN_PROCESO') && realizada == null) {
+            revisar.push({ addr: cell.addr, value: cell.value, puesto: pb.puesto, dia: dayCols[col], motivo: `la celda está coloreada como "${estado === 'PARCIAL' ? 'realizado parcialmente' : 'en proceso'}" pero el texto no dice cuánto se hizo (falta "X DE Y")` });
             continue;
           }
           records.push({
@@ -585,7 +697,133 @@ function parseSheetToRecords(ws, sheetName, legend, treatUncoloredAsPending, fal
   return { records, revisar, semanasResumen };
 }
 
-/* ---------------------- 4. CÁLCULOS ---------------------- */
+/* ---------------------- 2b. LECTURA/INTERPRETACIÓN DEL EXCEL DE NETSUITE ---------------------- */
+const NETSUITE_HEADERS = {
+  centro: ['centro de trabajo'],
+  wo: ['número de pedido de trabajo', 'numero de pedido de trabajo'],
+  codigo: ['artículo', 'articulo'],
+  descripcion: ['nombre para mostrar'],
+  operacion: ['nombre de operación', 'nombre de operacion'],
+  planificada: ['cantidad planificada'],
+  realizada: ['cantidad real'],
+  pendiente: ['cantidad restante'],
+  estado: ['estado']
+};
+const NetsuiteReader = {
+  /** Lee la primera hoja con pinta de exportación de NetSuite: encabezados en la fila 1,
+   *  identificados por nombre (no por posición de columna, para tolerar que Netsuite reordene columnas). */
+  parseWorkbook(wb) {
+    const ws = wb.worksheets[0];
+    const headerRow = [];
+    ws.getRow(1).eachCell({ includeEmpty: true }, cell => { headerRow.push(String(cell.value || '').trim().toLowerCase()); });
+    const colIndex = {};
+    for (const [key, aliases] of Object.entries(NETSUITE_HEADERS)) {
+      const idx = headerRow.findIndex(h => aliases.includes(h));
+      if (idx >= 0) colIndex[key] = idx + 1;
+    }
+    const faltantes = Object.keys(NETSUITE_HEADERS).filter(k => !colIndex[k]);
+    if (faltantes.length) throw new Error('El Excel de NetSuite no tiene las columnas esperadas: ' + faltantes.join(', ') + '. Revisá que sea el export crudo tal cual sale de NetSuite.');
+
+    const rows = [];
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const get = key => { const c = row.getCell(colIndex[key]); return c ? c.value : null; };
+      const wo = get('wo'), codigo = get('codigo');
+      if (!wo && !codigo) return;
+      const centroRaw = String(get('centro') || '').trim();
+      rows.push({
+        centro: centroRaw,
+        centroNormalizado: normalizeCentro(centroRaw),
+        wo: String(wo || '').trim(),
+        codigo: String(codigo || '').trim(),
+        descripcion: String(get('descripcion') || '').trim(),
+        operacion: String(get('operacion') || '').trim(),
+        planificada: numOrNull(get('planificada')),
+        realizada: numOrNull(get('realizada')),
+        pendiente: numOrNull(get('pendiente')),
+        estado: String(get('estado') || '').trim()
+      });
+    });
+    return rows;
+  }
+};
+function numOrNull(v) { if (v === null || v === undefined || v === '') return null; const n = parseFloat(v); return isNaN(n) ? null : n; }
+/** Saca el prefijo de planta ("AX3SF-", "AX2SF-", etc.) para poder comparar "AX3SF-WMX/A" con "WMX/A". */
+function normalizeCentro(s) { return String(s || '').replace(/^AX\dSF-?/i, '').trim().toUpperCase(); }
+/** Extrae los códigos de puesto entre paréntesis de un texto de puesto del Excel semanal,
+ *  ej. "S-07 | CEL-02 / (WMA#6 | WMK#2)" -> ["WMA#6","WMK#2"]. */
+function extraerCodigosPuesto(puestoTexto) {
+  const m = String(puestoTexto || '').match(/\(([^)]*)\)/);
+  if (!m) return [];
+  return m[1].split('|').map(s => s.trim().toUpperCase()).filter(Boolean);
+}
+/** true si un centro de trabajo NetSuite (ya normalizado) corresponde a alguno de los códigos de puesto dados. */
+function centroCoincideConPuesto(centroNormalizado, codigosPuesto) {
+  const c = centroNormalizado.replace(/[^A-Z0-9]/g, '');
+  return codigosPuesto.some(cod => {
+    const k = cod.replace(/[^A-Z0-9]/g, '');
+    return k && (c === k || c.startsWith(k) || k.startsWith(c));
+  });
+}
+/** Devuelve, para un puesto del Excel, la lista de centros NetSuite a considerar:
+ *  primero el mapeo manual guardado en Configuración (si existe), si no, los códigos
+ *  entre paréntesis del propio texto del puesto. */
+function centrosParaPuesto(puestoTexto, puestoMapping) {
+  const manual = puestoMapping && puestoMapping[puestoTexto];
+  if (manual && manual.trim()) return manual.split(',').map(s => normalizeCentro(s.trim())).filter(Boolean);
+  return extraerCodigosPuesto(puestoTexto).map(normalizeCentro);
+}
+
+/* ---------------------- Cruce: Excel semanal vs NetSuite ---------------------- */
+const Cruce = {
+  ejecutar(excelRecords, netsuiteRows, puestoMapping) {
+    const pendientesADeclarar = [];
+    const declaradoDeMas = [];
+    const coincide = [];
+    const soloEnExcel = [];
+    const soloEnNetsuite = [];
+
+    // Sólo nos interesan, del lado de NetSuite, los centros de trabajo que corresponden a
+    // alguno de los puestos que aparecen en el Excel semanal (el resto -láser, pintura, etc.- se descarta).
+    const centrosRelevantes = new Set();
+    excelRecords.forEach(rec => centrosParaPuesto(rec.puesto, puestoMapping).forEach(c => centrosRelevantes.add(c)));
+    const centrosRelevantesArr = [...centrosRelevantes];
+    const netsuiteRelevante = netsuiteRows.filter(row => centroCoincideConPuesto(row.centroNormalizado, centrosRelevantesArr));
+
+    // Índice NetSuite por código+WO (puede haber varias filas: una por centro/operación distinta)
+    const nsIndex = new Map();
+    for (const row of netsuiteRelevante) {
+      const key = row.codigo + '|' + row.wo;
+      if (!nsIndex.has(key)) nsIndex.set(key, []);
+      nsIndex.get(key).push(row);
+    }
+    const usadas = new Set(); // filas de netsuite ya emparejadas, para poder calcular "sólo en netsuite" después
+
+    for (const rec of excelRecords) {
+      const codigosPuesto = centrosParaPuesto(rec.puesto, puestoMapping);
+      const candidatas = (nsIndex.get(rec.codigo + '|' + rec.wo) || []);
+      const match = candidatas.find(c => centroCoincideConPuesto(c.centroNormalizado, codigosPuesto));
+      if (!match) {
+        soloEnExcel.push({ ...rec, hayEnOtroCentro: candidatas.length > 0, centrosNetsuite: candidatas.map(c => c.centro).join(', ') });
+        continue;
+      }
+      usadas.add(match);
+      const excelReal = rec.cantidad_realizada || 0;
+      const nsReal = match.realizada || 0;
+      const item = { codigo: rec.codigo, descripcion: rec.descripcion, wo: rec.wo, puesto: rec.puesto, operario: rec.operario, excelReal, nsReal, diferencia: excelReal - nsReal, semana: rec.semana, anio: rec.anio };
+      if (excelReal > nsReal) pendientesADeclarar.push(item);
+      else if (excelReal < nsReal) declaradoDeMas.push(item);
+      else coincide.push(item);
+    }
+    for (const row of netsuiteRelevante) {
+      if (usadas.has(row)) continue;
+      soloEnNetsuite.push(row);
+    }
+    return { pendientesADeclarar, declaradoDeMas, coincide, soloEnExcel, soloEnNetsuite };
+  }
+};
+
+
 const Calc = {
   resumenSemana(records) {
     const r = { totalTrabajos: records.length, piezasPlanificadas: 0, piezasRealizadas: 0, piezasPendientes: 0,
@@ -652,8 +890,10 @@ const Store = {
       const data = JSON.parse(localStorage.getItem(this.KEY)) || {};
       if (!data.semanas) data.semanas = [];
       if (!data.manualEntries) data.manualEntries = []; // faltantes marcados como terminados a mano (no vienen de un Excel)
+      if (!data.cruces) data.cruces = []; // resultados guardados de cruces contra NetSuite
+      if (!data.operarios) data.operarios = {}; // perfiles editables por operario
       return data;
-    } catch (e) { return { semanas: [], manualEntries: [] }; }
+    } catch (e) { return { semanas: [], manualEntries: [], cruces: [], operarios: {} }; }
   },
   save(data) {
     const json = JSON.stringify(data);
@@ -682,6 +922,19 @@ const Store = {
   removeWeek(weekId) {
     const data = this.load();
     data.semanas = data.semanas.filter(w => w.id !== weekId);
+    this.save(data);
+  },
+  /** Guarda el resultado de un cruce contra NetSuite (queda disponible en el historial por operario). */
+  addCruce(cruce) {
+    const data = this.load();
+    const entry = { ...cruce, id: 'cruce_' + Date.now(), guardado: new Date().toISOString() };
+    data.cruces.push(entry);
+    this.save(data);
+    return entry;
+  },
+  saveOperarioPerfil(nombre, perfil) {
+    const data = this.load();
+    data.operarios[nombre] = { ...(data.operarios[nombre] || {}), ...perfil, nombre };
     this.save(data);
   },
   /** Registra que un pendiente se completó "fuera de planilla" (no se volvió a cargar en ningún Excel).
@@ -727,7 +980,8 @@ function updateStorageBanner(knownBytes) {
 function defaultConfig() {
   return {
     legend: { terminado: 'FF00FF00', no_realizado: 'FFFF0000', parcial: 'FFFF9900', en_proceso: 'FFFFFF00' },
-    treatUncoloredAsPending: true
+    treatUncoloredAsPending: true,
+    puestoMapping: {} // se completa/edita en Configuración: puesto (tal como figura en el Excel) -> centros de trabajo NetSuite separados por coma
   };
 }
 
@@ -742,7 +996,8 @@ const App = {
   currentWeekRevisar: [],
   currentWeekId: null,
   config: Store.loadConfig(),
-  charts: {}
+  charts: {},
+  cruce: { excelRecords: null, excelMeta: null, netsuiteRows: null, netsuiteFileName: null, resultado: null }
 };
 
 /* ---------------------- UI: navegación ---------------------- */
@@ -757,6 +1012,7 @@ function showView(name) {
   if (name === 'pendientes') renderPendientesView();
   if (name === 'historico') renderHistoricoView();
   if (name === 'config') renderConfigView();
+  if (name === 'operarios') renderOperariosView();
 }
 
 /* ---------------------- UI: carga de archivo ---------------------- */
@@ -921,6 +1177,151 @@ function loadCurrentWeekFromStore(weekId) {
   renderDashboard();
 }
 
+/* ---------------------- UI: Cruce NetSuite ---------------------- */
+function wireSimpleDropzone(dzId, inputId, btnId, onFile) {
+  const dz = document.getElementById(dzId);
+  const input = document.getElementById(inputId);
+  document.getElementById(btnId).addEventListener('click', () => input.click());
+  dz.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { if (input.files[0]) onFile(input.files[0]); });
+  ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
+  dz.addEventListener('drop', e => { if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+}
+
+wireSimpleDropzone('dzExcelSemanal', 'fileExcelSemanal', 'btnSelectExcelSemanal', async file => {
+  const statusEl = document.getElementById('statusExcelSemanal');
+  statusEl.className = 'status-line';
+  statusEl.textContent = 'Leyendo...';
+  await nextPaint();
+  try {
+    const { excelOk } = await window.__libsReady;
+    if (!excelOk) throw new Error('No se pudo cargar la librería de lectura de Excel.');
+    const wb = await ExcelReader.loadWorkbook(file);
+    let found = null;
+    for (const ws of wb.worksheets) {
+      if (ws.state === 'hidden' || ws.state === 'veryHidden' || isHojaHistorica(ws.name)) continue;
+      const cells = ExcelReader.sheetToCells(ws);
+      const blocks = GridParser.findWeekBlocks(cells);
+      if (blocks.length) { found = { ws, hoja: ws.name, cells, block: blocks[0] }; break; }
+    }
+    if (!found) throw new Error('No se detectó ninguna semana en este Excel.');
+    const yearMatch = found.hoja.match(/\b(20\d{2})\b/);
+    const anio = yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear();
+    const { records } = parseSheetToRecords(found.ws, found.hoja, App.config.legend, App.config.treatUncoloredAsPending, anio, found.cells);
+    App.cruce.excelRecords = records.filter(r => r.semana === found.block.semanaLabel);
+    App.cruce.excelMeta = { semana: found.block.semanaLabel, anio };
+    document.getElementById('dzExcelSemanalLabel').textContent = `${file.name} — semana ${found.block.semanaLabel}`;
+    statusEl.textContent = `${App.cruce.excelRecords.length} trabajos leídos.`;
+    statusEl.className = 'status-line ok';
+    checkCruceReady();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+});
+
+wireSimpleDropzone('dzExcelNetsuite', 'fileExcelNetsuite', 'btnSelectExcelNetsuite', async file => {
+  const statusEl = document.getElementById('statusExcelNetsuite');
+  statusEl.className = 'status-line';
+  statusEl.textContent = 'Leyendo...';
+  await nextPaint();
+  try {
+    const { excelOk } = await window.__libsReady;
+    if (!excelOk) throw new Error('No se pudo cargar la librería de lectura de Excel.');
+    const wb = await ExcelReader.loadWorkbook(file);
+    const rows = NetsuiteReader.parseWorkbook(wb);
+    App.cruce.netsuiteRows = rows;
+    App.cruce.netsuiteFileName = file.name;
+    document.getElementById('dzExcelNetsuiteLabel').textContent = file.name;
+    statusEl.textContent = `${rows.length} filas leídas.`;
+    statusEl.className = 'status-line ok';
+    checkCruceReady();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+});
+
+function checkCruceReady() {
+  const listo = App.cruce.excelRecords && App.cruce.netsuiteRows;
+  document.getElementById('btnCruzar').disabled = !listo;
+  document.getElementById('cruceHint').textContent = listo
+    ? 'Los dos archivos están listos. Tocá "Cargar / Cruzar" para comparar.'
+    : 'Cargá los dos archivos para habilitar el cruce.';
+}
+
+document.getElementById('btnCruzar').addEventListener('click', () => {
+  const resultado = Cruce.ejecutar(App.cruce.excelRecords, App.cruce.netsuiteRows, App.config.puestoMapping || {});
+  App.cruce.resultado = resultado;
+  renderCruceResultados(resultado);
+});
+
+function renderCruceResultados(r) {
+  document.getElementById('cruceResultados').style.display = 'block';
+  document.getElementById('cruceSemanaLabel').textContent = `${App.cruce.excelMeta.semana} (${App.cruce.excelMeta.anio})`;
+  document.getElementById('cruceKpis').innerHTML = [
+    ['Pendientes a declarar', r.pendientesADeclarar.length, r.pendientesADeclarar.length ? 'bad' : 'ok'],
+    ['Coincide', r.coincide.length, 'ok'],
+    ['Declarado de más', r.declaradoDeMas.length, 'warn'],
+    ['Sólo en Excel (sin match en NetSuite)', r.soloEnExcel.length, ''],
+    ['Sólo en NetSuite (no está en el Excel)', r.soloEnNetsuite.length, '']
+  ].map(([l, v, c]) => `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+
+  document.querySelector('#tblPendDeclarar tbody').innerHTML = r.pendientesADeclarar.map(x =>
+    `<tr><td>${x.codigo}</td><td>${escapeHtml(x.descripcion || '')}</td><td>${x.wo}</td><td>${x.puesto}</td><td>${x.operario}</td>
+     <td>${x.excelReal}</td><td>${x.nsReal}</td><td><b style="color:var(--bad);">${x.diferencia}</b></td></tr>`).join('') ||
+    `<tr><td colspan="8" class="muted" style="text-align:center;padding:16px;">Ninguno — todo lo pintado como hecho ya está declarado en NetSuite. 🎉</td></tr>`;
+
+  const tabs = [
+    ['declaradoDeMas', 'Declarado de más', r.declaradoDeMas, ['Código', 'Descripción', 'WO', 'Puesto', 'Operario', 'Excel', 'NetSuite', 'Diferencia'],
+      x => [x.codigo, x.descripcion, x.wo, x.puesto, x.operario, x.excelReal, x.nsReal, x.diferencia]],
+    ['coincide', 'Coincide', r.coincide, ['Código', 'Descripción', 'WO', 'Puesto', 'Operario', 'Cantidad'],
+      x => [x.codigo, x.descripcion, x.wo, x.puesto, x.operario, x.excelReal]],
+    ['soloExcel', 'Sólo en Excel', r.soloEnExcel, ['Código', 'Descripción', 'WO', 'Puesto', 'Operario', 'Estado', '¿Existe en otro centro?'],
+      x => [x.codigo, x.descripcion, x.wo, x.puesto, x.operario, x.estado, x.hayEnOtroCentro ? ('sí: ' + x.centrosNetsuite) : 'no']],
+    ['soloNetsuite', 'Sólo en NetSuite', r.soloEnNetsuite, ['Código', 'Descripción', 'WO', 'Centro', 'Estado', 'Cantidad real'],
+      x => [x.codigo, x.descripcion, x.wo, x.centro, x.estado, x.realizada]]
+  ];
+  const box = document.getElementById('cruceOtrasTabs');
+  box.innerHTML = tabs.map((t, i) => `<button class="btn secondary small" data-cruce-tab="${i}">${t[1]} (${t[2].length})</button>`).join('');
+  const showTab = i => {
+    const [, , rows, headers, mapFn] = tabs[i];
+    document.getElementById('cruceOtrasContenido').innerHTML = tableHtml(headers, rows.map(mapFn));
+  };
+  box.querySelectorAll('[data-cruce-tab]').forEach(b => b.onclick = () => showTab(parseInt(b.dataset.cruceTab)));
+  showTab(0);
+}
+
+document.getElementById('btnGuardarCruce').addEventListener('click', () => {
+  if (!App.cruce.resultado) return;
+  Store.addCruce({
+    semana: App.cruce.excelMeta.semana, anio: App.cruce.excelMeta.anio,
+    netsuiteArchivo: App.cruce.netsuiteFileName,
+    pendientesADeclarar: App.cruce.resultado.pendientesADeclarar,
+    declaradoDeMas: App.cruce.resultado.declaradoDeMas,
+    resumen: { pendientes: App.cruce.resultado.pendientesADeclarar.length, coincide: App.cruce.resultado.coincide.length }
+  });
+  alert('Cruce guardado. Ya vas a poder verlo desde la pestaña Operarios, buscando a cada operario.');
+});
+
+document.getElementById('btnExportarCruce').addEventListener('click', async () => {
+  const r = App.cruce.resultado;
+  if (!r) return;
+  const wb = new ExcelJS.Workbook();
+  const mk = (name, headers, rows) => { const ws = wb.addWorksheet(name); ws.addRow(headers); rows.forEach(row => ws.addRow(row)); styleHeaderRow(ws); };
+  mk('Pendientes a declarar', ['Código', 'Descripción', 'WO', 'Puesto', 'Operario', 'Excel', 'NetSuite', 'Diferencia'],
+    r.pendientesADeclarar.map(x => [x.codigo, x.descripcion, x.wo, x.puesto, x.operario, x.excelReal, x.nsReal, x.diferencia]));
+  mk('Declarado de más', ['Código', 'Descripción', 'WO', 'Puesto', 'Operario', 'Excel', 'NetSuite', 'Diferencia'],
+    r.declaradoDeMas.map(x => [x.codigo, x.descripcion, x.wo, x.puesto, x.operario, x.excelReal, x.nsReal, x.diferencia]));
+  mk('Sólo en Excel', ['Código', 'Descripción', 'WO', 'Puesto', 'Operario', 'Estado'],
+    r.soloEnExcel.map(x => [x.codigo, x.descripcion, x.wo, x.puesto, x.operario, x.estado]));
+  mk('Sólo en NetSuite', ['Código', 'Descripción', 'WO', 'Centro', 'Estado', 'Cantidad real'],
+    r.soloEnNetsuite.map(x => [x.codigo, x.descripcion, x.wo, x.centro, x.estado, x.realizada]));
+  const buffer = await wb.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/octet-stream' }), `cruce_netsuite_${App.cruce.excelMeta.semana}.xlsx`);
+});
+
 /* ---------------------- UI: Dashboard ---------------------- */
 function renderDashboard() {
   const data = Store.load();
@@ -960,7 +1361,7 @@ function renderDashboard() {
   if (App.currentWeekRevisar && App.currentWeekRevisar.length) {
     revisarPanel.style.display = 'block';
     document.querySelector('#tblRevisar tbody').innerHTML = App.currentWeekRevisar.map(x =>
-      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td></tr>`).join('');
+      `<tr><td>${x.addr}</td><td>${escapeHtml(x.value)}</td><td>${x.puesto}</td><td>${x.dia}</td><td>${escapeHtml(x.motivo || '')}</td></tr>`).join('');
   } else {
     revisarPanel.style.display = 'none';
   }
@@ -1290,6 +1691,81 @@ function doSearch() {
   box.innerHTML = html;
 }
 
+/* ---------------------- UI: Operarios ---------------------- */
+function renderOperariosView() {
+  const data = Store.load();
+  const nombres = new Set([
+    ...Store.allRecords().map(r => r.operario).filter(Boolean),
+    ...Object.keys(data.operarios),
+    ...data.cruces.flatMap(c => [...c.pendientesADeclarar, ...c.declaradoDeMas].map(x => x.operario)).filter(Boolean)
+  ]);
+  const sel = document.getElementById('operarioSelect');
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Elegí un operario...</option>' +
+    [...nombres].sort().map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  if (actual) sel.value = actual;
+  sel.onchange = () => renderOperarioDetalle(sel.value);
+  if (sel.value) renderOperarioDetalle(sel.value);
+}
+
+function renderOperarioDetalle(nombre) {
+  const detalle = document.getElementById('operarioDetalle');
+  if (!nombre) { detalle.style.display = 'none'; return; }
+  detalle.style.display = 'block';
+  document.getElementById('operarioNombre').textContent = nombre;
+
+  const data = Store.load();
+  const perfil = data.operarios[nombre] || {};
+  const perfilView = document.getElementById('operarioPerfilView');
+  perfilView.innerHTML = (perfil.legajo ? `Legajo: <b>${escapeHtml(perfil.legajo)}</b> · ` : '') +
+    (perfil.turno ? `Turno habitual: <b>${escapeHtml(perfil.turno)}</b> · ` : '') +
+    (perfil.notas ? `${escapeHtml(perfil.notas)}` : (perfil.legajo || perfil.turno ? '' : 'Sin datos de perfil todavía — tocá "Editar perfil" para cargarlos.'));
+  document.getElementById('operarioPerfilForm').style.display = 'none';
+  document.getElementById('opLegajo').value = perfil.legajo || '';
+  document.getElementById('opTurno').value = perfil.turno || '';
+  document.getElementById('opNotas').value = perfil.notas || '';
+  document.getElementById('btnEditarPerfil').onclick = () => {
+    const form = document.getElementById('operarioPerfilForm');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  };
+  document.getElementById('btnGuardarPerfil').onclick = () => {
+    Store.saveOperarioPerfil(nombre, { legajo: document.getElementById('opLegajo').value.trim(), turno: document.getElementById('opTurno').value.trim(), notas: document.getElementById('opNotas').value.trim() });
+    document.getElementById('operarioPerfilForm').style.display = 'none';
+    renderOperarioDetalle(nombre);
+  };
+
+  const records = Store.allRecords().filter(r => r.operario === nombre);
+  const resumen = Calc.resumenSemana(records);
+  document.getElementById('operarioKpis').innerHTML = [
+    ['Trabajos registrados', records.length, ''],
+    ['Piezas realizadas', resumen.piezasRealizadas, 'ok'],
+    ['Piezas pendientes', resumen.piezasPendientes, resumen.piezasPendientes > 0 ? 'bad' : 'ok'],
+    ['% Cumplimiento histórico', resumen.cumplimiento.toFixed(1) + '%', resumen.cumplimiento >= 80 ? 'ok' : (resumen.cumplimiento >= 50 ? 'warn' : 'bad')]
+  ].map(([l, v, c]) => `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+
+  const porSemana = Calc.groupBy(records, r => r.semana + "'" + r.anio + '|' + weekSortKey(r))
+    .map(g => ({ ...g, label: g.key.split('|')[0], sortKey: parseFloat(g.key.split('|')[1]) }))
+    .sort((a, b) => a.sortKey - b.sortKey);
+  if (App.charts.chartOperarioEvolucion) App.charts.chartOperarioEvolucion.destroy();
+  if (typeof Chart !== 'undefined') {
+    const ctx = document.getElementById('chartOperarioEvolucion').getContext('2d');
+    App.charts.chartOperarioEvolucion = new Chart(ctx, {
+      type: 'line',
+      data: { labels: porSemana.map(g => g.label), datasets: [{ label: '% Cumplimiento', data: porSemana.map(g => +g.cumplimiento.toFixed(1)), borderColor: '#f5a623', backgroundColor: 'rgba(245,166,35,.18)', tension: .25, fill: true }] },
+      options: { scales: { y: { beginAtZero: true, max: 100 } } }
+    });
+  }
+
+  const declarar = data.cruces.flatMap(c => c.pendientesADeclarar.filter(x => x.operario === nombre).map(x => ({ ...x, semana: c.semana, anio: c.anio })));
+  document.querySelector('#tblOperarioDeclarar tbody').innerHTML = declarar.map(x =>
+    `<tr><td>${x.codigo}</td><td>${x.wo}</td><td>${x.semana} (${x.anio})</td><td>${x.excelReal}</td><td>${x.nsReal}</td><td>${x.diferencia}</td></tr>`).join('') ||
+    `<tr><td colspan="6" class="muted" style="text-align:center;padding:14px;">Ningún cruce guardado detectó pendientes de declaración para este operario.</td></tr>`;
+
+  document.querySelector('#tblOperarioTrabajos tbody').innerHTML = records.sort((a, b) => weekSortKey(b) - weekSortKey(a)).slice(0, 200).map(r =>
+    `<tr><td>${r.semana} (${r.anio})</td><td>${r.codigo}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`).join('');
+}
+
+
 /* ---------------------- UI: Configuración ---------------------- */
 function renderConfigView() {
   const legendNames = { terminado: 'Conjunto terminado', no_realizado: 'Conjunto no realizado', parcial: 'Conjunto realizado parcialmente', en_proceso: 'Conjunto en proceso' };
@@ -1301,6 +1777,24 @@ function renderConfigView() {
       <input type="color" data-legend="${k}" value="${hex}"><span class="muted">${argb}</span></div>`;
   }).join('');
   document.getElementById('chkUncoloredPending').checked = App.config.treatUncoloredAsPending;
+  renderPuestoMappingEditor();
+}
+function renderPuestoMappingEditor() {
+  const box = document.getElementById('puestoMappingEditor');
+  if (!box) return;
+  // puestos conocidos: los que aparecen en las semanas ya guardadas + los del cruce cargado ahora, si hay
+  const data = Store.load();
+  const puestos = new Set();
+  data.semanas.forEach(w => w.records.forEach(r => puestos.add(r.puesto)));
+  if (App.cruce.excelRecords) App.cruce.excelRecords.forEach(r => puestos.add(r.puesto));
+  if (!puestos.size) { box.innerHTML = '<p class="muted">Todavía no cargaste ninguna semana — el mapeo aparece acá una vez que haya puestos detectados.</p>'; return; }
+  box.innerHTML = [...puestos].sort().map(p => {
+    const auto = extraerCodigosPuesto(p).join(', ');
+    const manual = (App.config.puestoMapping || {})[p] || '';
+    return `<div class="legend-row"><label style="min-width:260px;">${escapeHtml(p)}</label>
+      <input type="text" data-puesto-map="${escapeHtml(p)}" value="${escapeHtml(manual)}" placeholder="auto: ${escapeHtml(auto) || '(sin código detectado)'}" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:8px;">
+    </div>`;
+  }).join('');
 }
 document.getElementById('btnSaveConfig').addEventListener('click', () => {
   document.querySelectorAll('[data-legend]').forEach(inp => {
@@ -1308,6 +1802,12 @@ document.getElementById('btnSaveConfig').addEventListener('click', () => {
     App.config.legend[inp.dataset.legend] = 'FF' + hex;
   });
   App.config.treatUncoloredAsPending = document.getElementById('chkUncoloredPending').checked;
+  App.config.puestoMapping = App.config.puestoMapping || {};
+  document.querySelectorAll('[data-puesto-map]').forEach(inp => {
+    const puesto = inp.dataset.puestoMap;
+    if (inp.value.trim()) App.config.puestoMapping[puesto] = inp.value.trim();
+    else delete App.config.puestoMapping[puesto];
+  });
   Store.saveConfig(App.config);
   alert('Configuración guardada. Se aplicará a la próxima semana que analices (las ya guardadas no se recalculan automáticamente).');
   renderConfigView();
@@ -1409,7 +1909,7 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v9 · aviso automático de espacio en el navegador';
+const APP_VERSION = 'v10 · cruce con NetSuite + historial y perfiles por operario';
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 const libsBanner = document.getElementById('libsBanner');
