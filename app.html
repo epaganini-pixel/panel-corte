@@ -735,7 +735,7 @@ const NetsuiteReader = {
       rows.push({
         centro: centroRaw,
         centroNormalizado: normalizeCentro(centroRaw),
-        wo: String(wo || '').trim(),
+        wo: normalizeWO(wo),
         codigo: String(codigo || '').trim(),
         descripcion: String(get('descripcion') || '').trim(),
         operacion: String(get('operacion') || '').trim(),
@@ -751,6 +751,8 @@ const NetsuiteReader = {
 function numOrNull(v) { if (v === null || v === undefined || v === '') return null; const n = parseFloat(v); return isNaN(n) ? null : n; }
 /** Saca el prefijo de planta ("AX3SF-", "AX2SF-", etc.) para poder comparar "AX3SF-WMX/A" con "WMX/A". */
 function normalizeCentro(s) { return String(s || '').replace(/^AX\dSF-?/i, '').trim().toUpperCase(); }
+/** Deja sólo los dígitos del WO, sin importar si viene como "WO-128716", "128716" o el número 128716. */
+function normalizeWO(v) { const s = String(v == null ? '' : v).trim(); const m = s.match(/(\d+)/); return m ? m[1] : s; }
 /** Extrae los códigos de puesto entre paréntesis de un texto de puesto del Excel semanal,
  *  ej. "S-07 | CEL-02 / (WMA#6 | WMK#2)" -> ["WMA#6","WMK#2"]. */
 function extraerCodigosPuesto(puestoTexto) {
@@ -776,6 +778,9 @@ function centrosParaPuesto(puestoTexto, puestoMapping) {
 }
 
 /* ---------------------- Cruce: Excel semanal vs NetSuite ---------------------- */
+/** Separa un texto de WO que puede traer varios juntos, ej. "108515|111159" -> ["108515","111159"]. */
+function separarWOs(woTexto) { return String(woTexto || '').split('|').map(s => s.trim()).filter(Boolean); }
+
 const Cruce = {
   ejecutar(excelRecords, netsuiteRows, puestoMapping) {
     const pendientesADeclarar = [];
@@ -791,7 +796,8 @@ const Cruce = {
     const centrosRelevantesArr = [...centrosRelevantes];
     const netsuiteRelevante = netsuiteRows.filter(row => centroCoincideConPuesto(row.centroNormalizado, centrosRelevantesArr));
 
-    // Índice NetSuite por código+WO (puede haber varias filas: una por centro/operación distinta)
+    // Índice NetSuite por código+WO (puede haber varias filas: una por centro/operación distinta,
+    // y en el Excel una misma celda puede traer más de un WO separado por "|").
     const nsIndex = new Map();
     for (const row of netsuiteRelevante) {
       const key = row.codigo + '|' + row.wo;
@@ -807,28 +813,36 @@ const Cruce = {
 
     for (const rec of paraChequear) {
       const codigosPuesto = centrosParaPuesto(rec.puesto, puestoMapping);
-      const candidatas = (nsIndex.get(rec.codigo + '|' + rec.wo) || []);
-      const match = candidatas.find(c => centroCoincideConPuesto(c.centroNormalizado, codigosPuesto));
+      const wosDeLaCelda = separarWOs(rec.wo);
+      const candidatas = wosDeLaCelda.flatMap(w => nsIndex.get(rec.codigo + '|' + w) || []);
       const base = { codigo: rec.codigo, descripcion: rec.descripcion, wo: rec.wo, puesto: rec.puesto, operario: rec.operario, semana: rec.semana, anio: rec.anio };
 
-      if (!match) {
-        // no figura en la lista de pendientes de NetSuite -> lo más probable es que ya esté declarado/cerrado
-        yaDeclarado.push({ ...base, excelReal: rec.cantidad_realizada, hayEnOtroCentro: candidatas.length > 0, centrosNetsuite: candidatas.map(c => c.centro).join(', ') });
+      if (!candidatas.length) {
+        // no figura en la lista de pendientes de NetSuite (en ningún centro) -> lo más probable es que ya esté declarado/cerrado
+        yaDeclarado.push({ ...base, excelReal: rec.cantidad_realizada });
         continue;
       }
+      // preferimos la coincidencia en el centro de trabajo esperado para este puesto; si ninguna candidata
+      // cae justo ahí, igual avisamos usando la que tenga más pendiente, aclarando en qué centro figura,
+      // para que se revise a mano en vez de descartarla en silencio.
+      let match = candidatas.find(c => centroCoincideConPuesto(c.centroNormalizado, codigosPuesto));
+      let centroSeguro = true;
+      if (!match) { match = candidatas.slice().sort((a, b) => (b.pendiente || 0) - (a.pendiente || 0))[0]; centroSeguro = false; }
+
       usadas.add(match);
       const excelReal = rec.cantidad_realizada || 0;
       const nsReal = match.realizada || 0;
       const diferencia = excelReal - nsReal;
-      const item = { ...base, excelReal, nsReal, diferencia };
+      const avisoCentro = centroSeguro ? '' : ` (ojo: en NetSuite ese WO figura en el centro "${match.centro}", no en el puesto "${rec.puesto}" del Excel — conviene revisarlo a mano)`;
+      const item = { ...base, wo: match.wo, excelReal, nsReal, diferencia, centroNetsuite: match.centro, centroSeguro };
 
       if (diferencia > 0) {
-        item.mensaje = nsReal === 0
-          ? `La WO-${rec.wo} no ha sido declarada en NetSuite (figura ${excelReal} realizado de "${rec.codigo}" en el Excel).`
-          : `La WO-${rec.wo} tiene declaradas ${nsReal} unidades de "${rec.codigo}" en NetSuite; en el Excel figuran ${excelReal} — faltan declarar ${diferencia}.`;
+        item.mensaje = (nsReal === 0
+          ? `La WO-${match.wo} no ha sido declarada en NetSuite (figura ${excelReal} realizado de "${rec.codigo}" en el Excel).`
+          : `La WO-${match.wo} tiene declaradas ${nsReal} unidades de "${rec.codigo}" en NetSuite; en el Excel figuran ${excelReal} — faltan declarar ${diferencia}.`) + avisoCentro;
         pendientesADeclarar.push(item);
       } else if (diferencia < 0) {
-        item.mensaje = `La WO-${rec.wo} tiene declaradas ${nsReal} unidades de "${rec.codigo}" en NetSuite, más que las ${excelReal} pintadas en el Excel.`;
+        item.mensaje = `La WO-${match.wo} tiene declaradas ${nsReal} unidades de "${rec.codigo}" en NetSuite, más que las ${excelReal} pintadas en el Excel.` + avisoCentro;
         declaradoDeMas.push(item);
       } else {
         coincide.push(item);
@@ -1936,7 +1950,7 @@ function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10);
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v11 · cruce corregido (NetSuite = lista de pendientes) + selección manual al historial';
+const APP_VERSION = 'v12 · corregido cruce real: WO con prefijo, WO múltiples por celda, y aviso cuando el centro no coincide';
 document.getElementById('appVersion').textContent = APP_VERSION;
 
 const libsBanner = document.getElementById('libsBanner');
