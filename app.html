@@ -106,7 +106,6 @@ table tr:hover td{background:#fbf9f3;}
 .status-line.ok{color:var(--ok);}
 .quicklinks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
 .detail-card{background:#fbf9f4;border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:13px 15px;margin-bottom:8px;}
-.footer-note{font-size:11.5px;color:var(--muted);text-align:center;margin-top:20px;}
 .modal-overlay{position:fixed;inset:0;background:rgba(33,29,23,.55);display:flex;align-items:center;justify-content:center;z-index:1000;}
 .modal-box{background:#fff;border-radius:12px;padding:22px;max-width:460px;width:92%;max-height:88vh;overflow:auto;}
 .modal-box h3{margin-top:0;color:var(--ink);font-size:15px;}
@@ -126,7 +125,6 @@ table tr:hover td{background:#fbf9f3;}
       <div class="sub" id="hdrSub">Sin datos cargados</div>
     </div>
   </div>
-  <div class="sub">Aplicación local · el Excel original no se modifica · <span id="appVersion"></span></div>
 </header>
 <div id="libsBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
 <div id="storageBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
@@ -148,7 +146,7 @@ table tr:hover td{background:#fbf9f3;}
 <section class="view active" id="view-cargar">
   <div class="panel">
     <h2>1. Cargar el Excel de la semana</h2>
-    <p class="muted">Cargá el Excel de seguimiento tal como lo usa el planificador. No se modifica el archivo original; sólo se lee para generar el análisis.</p>
+    <p class="muted">Cargá el Excel de seguimiento tal como lo usa el planificador.</p>
     <div class="dropzone" id="dropzone">
       <p class="big">ARRASTRAR EXCEL AQUÍ</p>
       <p>o</p>
@@ -330,12 +328,13 @@ table tr:hover td{background:#fbf9f3;}
       <div class="kpi-grid" id="operarioKpis" style="margin-top:14px;"></div>
     </div>
     <div class="panel">
-      <h2>Cumplimiento por semana</h2>
-      <div class="chart-box"><canvas id="chartOperarioEvolucion"></canvas></div>
+      <h2>Cumplimiento por mes</h2>
+      <div class="chart-box"><canvas id="chartOperarioMes"></canvas></div>
     </div>
     <div class="panel">
-      <h2>Pendientes a declarar detectados (histórico de cruces)</h2>
-      <div class="table-wrap"><table id="tblOperarioDeclarar"><thead><tr><th>Código</th><th>WO</th><th>Semana</th><th>Mensaje</th><th>Adherido</th></tr></thead><tbody></tbody></table></div>
+      <h2>Veces sin declarar en NetSuite, por mes</h2>
+      <p class="muted">Cuenta cada vez que se adhirió al historial un "pendiente a declarar" de un cruce contra NetSuite. No incluye piezas pendientes de producción — eso puede terminarlo otro operario, así que no queda como una deuda personal.</p>
+      <div class="chart-box"><canvas id="chartOperarioDeclarar"></canvas></div>
     </div>
     <div class="panel">
       <h2>Trabajos registrados</h2>
@@ -419,7 +418,6 @@ table tr:hover td{background:#fbf9f3;}
 
 </main>
 <div id="modalRoot"></div>
-<div class="footer-note">Los datos se calculan de forma determinística a partir del Excel — no se generan cifras ficticias.</div>
 
 <script>
 /* =====================================================================
@@ -1049,14 +1047,7 @@ function showView(name) {
 }
 
 /* ---------------------- UI: carga de archivo ---------------------- */
-const dropzone = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
-document.getElementById('btnSelect').addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
-['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
-dropzone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
-dropzone.addEventListener('click', () => fileInput.click());
+wireSimpleDropzone('dropzone', 'fileInput', 'btnSelect', handleFile);
 
 // Las hojas de HISTÓRICO acumulan decenas de semanas en miles de filas: no se escanean
 // automáticamente al cargar (sería muy lento), sólo las hojas "actuales" (una semana por hoja).
@@ -1293,13 +1284,13 @@ document.getElementById('btnCruzar').addEventListener('click', () => {
 function renderCruceResultados(r) {
   document.getElementById('cruceResultados').style.display = 'block';
   document.getElementById('cruceSemanaLabel').textContent = `${App.cruce.excelMeta.semana} (${App.cruce.excelMeta.anio})`;
-  document.getElementById('cruceKpis').innerHTML = [
+  document.getElementById('cruceKpis').innerHTML = kpiGridHtml([
     ['Pendientes a declarar', r.pendientesADeclarar.length, r.pendientesADeclarar.length ? 'bad' : 'ok'],
     ['Coincide', r.coincide.length, 'ok'],
     ['Declarado de más', r.declaradoDeMas.length, 'warn'],
     ['Ya declarado (no está en lo pendiente de NetSuite)', r.yaDeclarado.length, 'ok'],
     ['Pendiente en NetSuite, no pintado en el Excel', r.soloEnNetsuite.length, '']
-  ].map(([l, v, c]) => `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+  ]);
 
   document.querySelector('#tblPendDeclarar tbody').innerHTML = r.pendientesADeclarar.map((x, i) =>
     `<tr><td><input type="checkbox" class="chkDeclarar" data-idx="${i}"></td><td>${x.codigo}</td><td>${x.wo}</td><td>${x.puesto}</td><td>${x.operario}</td><td>${escapeHtml(x.mensaje)}</td></tr>`).join('') ||
@@ -1777,33 +1768,41 @@ function renderOperarioDetalle(nombre) {
 
   const records = Store.allRecords().filter(r => r.operario === nombre);
   const resumen = Calc.resumenSemana(records);
-  document.getElementById('operarioKpis').innerHTML = [
+  const declarar = data.cruces.flatMap(c => c.pendientesADeclarar.filter(x => x.operario === nombre).map(x => ({ ...x, semana: c.semana, anio: c.anio, guardado: c.guardado })));
+  document.getElementById('operarioKpis').innerHTML = kpiGridHtml([
     ['Trabajos registrados', records.length, ''],
     ['Piezas realizadas', resumen.piezasRealizadas, 'ok'],
-    ['Piezas pendientes', resumen.piezasPendientes, resumen.piezasPendientes > 0 ? 'bad' : 'ok'],
-    ['% Cumplimiento histórico', resumen.cumplimiento.toFixed(1) + '%', resumen.cumplimiento >= 80 ? 'ok' : (resumen.cumplimiento >= 50 ? 'warn' : 'bad')]
-  ].map(([l, v, c]) => `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
+    ['% Cumplimiento total', resumen.cumplimiento.toFixed(1) + '%', resumen.cumplimiento >= 80 ? 'ok' : (resumen.cumplimiento >= 50 ? 'warn' : 'bad')],
+    ['Veces sin declarar (total)', declarar.length, declarar.length ? 'bad' : 'ok']
+  ]);
 
-  const porSemana = Calc.groupBy(records, r => r.semana + "'" + r.anio + '|' + weekSortKey(r))
-    .map(g => ({ ...g, label: g.key.split('|')[0], sortKey: parseFloat(g.key.split('|')[1]) }))
-    .sort((a, b) => a.sortKey - b.sortKey);
-  if (App.charts.chartOperarioEvolucion) App.charts.chartOperarioEvolucion.destroy();
+  // Cumplimiento por mes: cada semana se ubica en el mes calendario donde cae su lunes (aproximado a partir de semana+año).
+  const porMes = Calc.groupBy(records, r => mesDeSemana(r.anio, r.semana))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const declararPorMes = new Map();
+  declarar.forEach(x => { const m = mesDeSemana(x.anio, x.semana); declararPorMes.set(m, (declararPorMes.get(m) || 0) + 1); });
+  const mesesDeclarar = [...declararPorMes.keys()].sort();
   if (typeof Chart !== 'undefined') {
-    const ctx = document.getElementById('chartOperarioEvolucion').getContext('2d');
-    App.charts.chartOperarioEvolucion = new Chart(ctx, {
-      type: 'line',
-      data: { labels: porSemana.map(g => g.label), datasets: [{ label: '% Cumplimiento', data: porSemana.map(g => +g.cumplimiento.toFixed(1)), borderColor: '#f5a623', backgroundColor: 'rgba(245,166,35,.18)', tension: .25, fill: true }] },
-      options: { scales: { y: { beginAtZero: true, max: 100 } } }
-    });
+    drawBar('chartOperarioMes', porMes.map(g => etiquetaMes(g.key)), [{ label: '% Cumplimiento', data: porMes.map(g => +g.cumplimiento.toFixed(1)), color: '#f5a623' }]);
+    drawBar('chartOperarioDeclarar', mesesDeclarar.map(etiquetaMes), [{ label: 'Veces sin declarar', data: mesesDeclarar.map(m => declararPorMes.get(m)), color: '#e0503a' }]);
   }
-
-  const declarar = data.cruces.flatMap(c => c.pendientesADeclarar.filter(x => x.operario === nombre).map(x => ({ ...x, semana: c.semana, anio: c.anio, guardado: c.guardado })));
-  document.querySelector('#tblOperarioDeclarar tbody').innerHTML = declarar.sort((a, b) => new Date(b.guardado) - new Date(a.guardado)).map(x =>
-    `<tr><td>${x.codigo}</td><td>${x.wo}</td><td>${x.semana} (${x.anio})</td><td>${escapeHtml(x.mensaje || '')}</td><td>${new Date(x.guardado).toLocaleDateString('es-AR')}</td></tr>`).join('') ||
-    `<tr><td colspan="5" class="muted" style="text-align:center;padding:14px;">Todavía no adheriste ningún pendiente al historial de este operario.</td></tr>`;
 
   document.querySelector('#tblOperarioTrabajos tbody').innerHTML = records.sort((a, b) => weekSortKey(b) - weekSortKey(a)).slice(0, 200).map(r =>
     `<tr><td>${r.semana} (${r.anio})</td><td>${r.codigo}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`).join('');
+}
+
+/** Aproxima a qué mes calendario corresponde una semana (a partir del lunes de esa semana ISO). Devuelve clave "AAAA-MM" ordenable. */
+function mesDeSemana(anio, semanaLabel) {
+  const n = parseInt(String(semanaLabel || 'W0').replace(/\D/g, '')) || 1;
+  const simple = new Date(anio, 0, 1 + (n - 1) * 7);
+  const dow = simple.getDay() || 7;
+  simple.setDate(simple.getDate() + 1 - dow); // lunes de esa semana ISO
+  return simple.getFullYear() + '-' + String(simple.getMonth() + 1).padStart(2, '0');
+}
+function etiquetaMes(claveMes) {
+  const [anio, mes] = claveMes.split('-');
+  const nombres = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  return nombres[parseInt(mes) - 1] + " '" + anio.slice(2);
 }
 
 
@@ -1948,11 +1947,10 @@ function downloadBlob(blob, filename) {
 }
 function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+/** Arma el HTML de una grilla de tarjetas KPI a partir de [etiqueta, valor, clase] */
+function kpiGridHtml(items) { return items.map(([l, v, c]) => `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join(''); }
 
 /* ---------------------- Inicio ---------------------- */
-const APP_VERSION = 'v12 · corregido cruce real: WO con prefijo, WO múltiples por celda, y aviso cuando el centro no coincide';
-document.getElementById('appVersion').textContent = APP_VERSION;
-
 const libsBanner = document.getElementById('libsBanner');
 libsBanner.style.display = 'block';
 libsBanner.textContent = 'Cargando librerías necesarias (ExcelJS, Chart.js)...';
