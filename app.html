@@ -93,6 +93,8 @@ table tr:hover td{background:#fbf9f3;}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
 .toolbar input[type=text]{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex:1;min-width:180px;}
 .toolbar select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;}
+.plan-input{width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;}
+.plan-input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
 .pill{display:inline-block;background:var(--accent-light);color:var(--accent-dark);border-radius:12px;padding:3px 10px;font-size:11px;margin:2px;font-weight:600;}
 .export-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .muted{color:var(--muted);font-size:12px;}
@@ -131,6 +133,7 @@ table tr:hover td{background:#fbf9f3;}
 
 <nav class="tabs" id="tabs">
   <button data-view="cargar" class="active">Cargar Excel</button>
+  <button data-view="planificador">Planificador</button>
   <button data-view="dashboard">Dashboard semanal</button>
   <button data-view="pendientes">Pendientes</button>
   <button data-view="cruce">Cruce NetSuite</button>
@@ -177,6 +180,42 @@ table tr:hover td{background:#fbf9f3;}
     <div class="export-row"><button class="btn secondary" id="btnImportHistoricas">Escanear e importar hojas de HISTÓRICO</button></div>
     <div id="histImportStatus" class="status-line"></div>
   </div>
+</section>
+
+<!-- ============ VISTA: PLANIFICADOR ============ -->
+<section class="view" id="view-planificador">
+  <div class="panel">
+    <h2>Armar el Excel de la semana</h2>
+    <p class="muted">Cargá acá los trabajos planificados y descargá un Excel ya ordenado, listo para pintar durante la semana y volver a subir el viernes en "Cargar Excel". No hace falta llenar todos los campos de una: podés ir agregando filas a medida que planificás cada puesto.</p>
+    <div class="toolbar">
+      <input type="text" id="planSemana" placeholder="Semana (ej: W38)" style="max-width:160px;">
+      <input type="number" id="planAnio" placeholder="Año" style="max-width:120px;">
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+      <h2 style="border:none;margin:0;">Trabajos</h2>
+      <div class="export-row" style="margin:0;">
+        <button class="btn secondary small" id="btnPlanImportarPendientes">Importar pendientes actuales</button>
+        <button class="btn secondary small" id="btnPlanAgregarFila">+ Agregar trabajo</button>
+        <button class="btn secondary small" id="btnPlanVaciar" style="border-color:var(--bad);color:var(--bad);">Vaciar todo</button>
+      </div>
+    </div>
+    <p class="muted" id="planHint">Todavía no agregaste ningún trabajo.</p>
+    <div class="table-wrap" style="max-height:520px;">
+      <table id="tblPlanificador">
+        <thead><tr><th style="min-width:150px;">Puesto</th><th style="min-width:110px;">Turno</th><th style="min-width:140px;">Operario(s)</th><th style="min-width:110px;">Día</th><th style="min-width:110px;">Código</th><th style="min-width:180px;">Descripción</th><th style="min-width:80px;">Cant.</th><th style="min-width:130px;">WO</th><th></th></tr></thead>
+        <tbody id="tblPlanificadorBody"></tbody>
+      </table>
+    </div>
+    <div class="export-row">
+      <button class="btn" id="btnPlanGenerar">Generar y descargar Excel de la semana</button>
+    </div>
+  </div>
+  <datalist id="dlPlanPuestos"></datalist>
+  <datalist id="dlPlanOperarios"></datalist>
+  <datalist id="dlPlanTurnos"></datalist>
 </section>
 
 <!-- ============ VISTA: DASHBOARD ============ -->
@@ -1054,7 +1093,8 @@ const App = {
   currentWeekId: null,
   config: Store.loadConfig(),
   charts: {},
-  cruce: { excelRecords: null, excelMeta: null, netsuiteRows: null, netsuiteFileName: null, resultado: null }
+  cruce: { excelRecords: null, excelMeta: null, netsuiteRows: null, netsuiteFileName: null, resultado: null },
+  planificador: { filas: [] }
 };
 
 /* ---------------------- UI: navegación ---------------------- */
@@ -1070,6 +1110,7 @@ function showView(name) {
   if (name === 'historico') renderHistoricoView();
   if (name === 'config') renderConfigView();
   if (name === 'operarios') renderOperariosView();
+  if (name === 'planificador') renderPlanificadorView();
 }
 
 /* ---------------------- UI: carga de archivo ---------------------- */
@@ -1841,6 +1882,171 @@ function etiquetaMes(claveMes) {
   const nombres = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   return nombres[parseInt(mes) - 1] + " '" + anio.slice(2);
 }
+
+/* ---------------------- UI: Planificador ---------------------- */
+const PLAN_DRAFT_KEY = 'soldadura_planificador_draft_v1';
+const DIAS_PLAN = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES'];
+const DIA_COL_PLAN = { LUNES: 1, MARTES: 3, 'MIÉRCOLES': 5, JUEVES: 7, VIERNES: 9 };
+
+function nuevaFilaPlan(datos) {
+  return { puesto: '', turno: '', operario: '', dia: '', codigo: '', descripcion: '', cantidad: '', wo: '', ...datos };
+}
+function cargarBorradorPlan() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PLAN_DRAFT_KEY));
+    if (saved && saved.filas && saved.filas.length) {
+      App.planificador.filas = saved.filas;
+      if (saved.semana) document.getElementById('planSemana').value = saved.semana;
+      if (saved.anio) document.getElementById('planAnio').value = saved.anio;
+    }
+  } catch (e) {}
+}
+function guardarBorradorPlan() {
+  try {
+    localStorage.setItem(PLAN_DRAFT_KEY, JSON.stringify({
+      filas: App.planificador.filas,
+      semana: document.getElementById('planSemana').value,
+      anio: document.getElementById('planAnio').value
+    }));
+  } catch (e) {}
+}
+
+function renderPlanificadorView() {
+  if (!App.planificador.filas.length) cargarBorradorPlan();
+
+  // sugerencias a partir de lo que ya se vio en el histórico (puestos, operarios, turnos reales)
+  const puestos = new Set(), operarios = new Set(), turnos = new Set();
+  Store.allRecords().forEach(r => { if (r.puesto) puestos.add(r.puesto); if (r.turno) turnos.add(r.turno); separarOperarios(r.operario).forEach(o => operarios.add(o)); });
+  document.getElementById('dlPlanPuestos').innerHTML = [...puestos].sort().map(p => `<option value="${escapeHtml(p)}">`).join('');
+  document.getElementById('dlPlanOperarios').innerHTML = [...operarios].sort().map(o => `<option value="${escapeHtml(o)}">`).join('');
+  document.getElementById('dlPlanTurnos').innerHTML = [...turnos].sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
+
+  if (!App.planificador.filas.length) App.planificador.filas.push(nuevaFilaPlan());
+  drawPlanificadorTable();
+}
+
+function drawPlanificadorTable() {
+  const tbody = document.getElementById('tblPlanificadorBody');
+  const campoInput = (idx, campo, placeholder, list) => {
+    const val = escapeHtml(App.planificador.filas[idx][campo] || '');
+    const listAttr = list ? ` list="${list}"` : '';
+    return `<input class="plan-input" data-idx="${idx}" data-campo="${campo}" value="${val}" placeholder="${placeholder || ''}"${listAttr}>`;
+  };
+  const campoSelectDia = idx => {
+    const val = App.planificador.filas[idx].dia || '';
+    return `<select class="plan-input" data-idx="${idx}" data-campo="dia">
+      <option value="">-</option>
+      ${DIAS_PLAN.map(d => `<option value="${d}" ${val === d ? 'selected' : ''}>${d.charAt(0) + d.slice(1).toLowerCase()}</option>`).join('')}
+    </select>`;
+  };
+  tbody.innerHTML = App.planificador.filas.map((f, idx) => `<tr>
+    <td>${campoInput(idx, 'puesto', 'ej: S-01 / (WMX)', 'dlPlanPuestos')}</td>
+    <td>${campoInput(idx, 'turno', 'ej: MAÑANA', 'dlPlanTurnos')}</td>
+    <td>${campoInput(idx, 'operario', 'ej: FERREYRA/BUSON', 'dlPlanOperarios')}</td>
+    <td>${campoSelectDia(idx)}</td>
+    <td>${campoInput(idx, 'codigo', 'ej: H0001849')}</td>
+    <td>${campoInput(idx, 'descripcion', 'opcional')}</td>
+    <td><input class="plan-input" type="number" min="0" data-idx="${idx}" data-campo="cantidad" value="${escapeHtml(String(f.cantidad || ''))}"></td>
+    <td>${campoInput(idx, 'wo', 'ej: 128716')}</td>
+    <td><button class="link-btn" data-plan-quitar="${idx}" style="color:var(--bad);">Quitar</button></td>
+  </tr>`).join('');
+
+  tbody.querySelectorAll('.plan-input').forEach(el => el.addEventListener('input', () => {
+    App.planificador.filas[parseInt(el.dataset.idx)][el.dataset.campo] = el.value;
+    guardarBorradorPlan();
+  }));
+  tbody.querySelectorAll('[data-plan-quitar]').forEach(b => b.onclick = () => {
+    App.planificador.filas.splice(parseInt(b.dataset.planQuitar), 1);
+    if (!App.planificador.filas.length) App.planificador.filas.push(nuevaFilaPlan());
+    guardarBorradorPlan();
+    drawPlanificadorTable();
+  });
+
+  const completas = App.planificador.filas.filter(f => f.puesto && f.dia && f.codigo).length;
+  document.getElementById('planHint').textContent = `${App.planificador.filas.length} fila(s) cargada(s) — ${completas} lista(s) para exportar (necesitan al menos puesto, día y código).`;
+}
+
+document.getElementById('btnPlanAgregarFila').addEventListener('click', () => {
+  App.planificador.filas.push(nuevaFilaPlan());
+  guardarBorradorPlan();
+  drawPlanificadorTable();
+});
+document.getElementById('btnPlanVaciar').addEventListener('click', () => {
+  if (!confirm('¿Vaciar todos los trabajos cargados en el planificador?')) return;
+  App.planificador.filas = [nuevaFilaPlan()];
+  localStorage.removeItem(PLAN_DRAFT_KEY);
+  drawPlanificadorTable();
+});
+document.getElementById('btnPlanImportarPendientes').addEventListener('click', () => {
+  const map = Calc.estadoActualPorWO(Store.allRecords());
+  const pendientes = [...map.values()].map(e => e.ultimo).filter(r => (r.cantidad_pendiente || 0) > 0);
+  if (!pendientes.length) { alert('No hay pendientes actuales registrados en el histórico para importar.'); return; }
+  const nuevas = pendientes.map(r => nuevaFilaPlan({ puesto: r.puesto, turno: r.turno || '', operario: r.operario, codigo: r.codigo, descripcion: r.descripcion, cantidad: r.cantidad_pendiente, wo: r.wo }));
+  // si sólo había una fila vacía sin usar, la reemplaza; si no, las agrega al final
+  const vacias = App.planificador.filas.every(f => !f.puesto && !f.codigo);
+  App.planificador.filas = vacias ? nuevas : App.planificador.filas.concat(nuevas);
+  guardarBorradorPlan();
+  drawPlanificadorTable();
+  alert(`Se importaron ${nuevas.length} pendiente(s). Faltan asignarles el día de la semana que corresponda.`);
+});
+
+/** Acepta "128716", "128716|129655" o "128716, 129655" y devuelve los números sueltos. */
+function separarWOsTexto(txt) { return String(txt || '').split(/[|,]/).map(s => s.replace(/\D/g, '')).filter(Boolean); }
+
+document.getElementById('btnPlanGenerar').addEventListener('click', async () => {
+  const { excelOk } = await window.__libsReady;
+  if (!excelOk || typeof ExcelJS === 'undefined') { alert('No se pudo cargar la librería para generar el Excel. Revisá tu conexión a internet.'); return; }
+
+  const semana = document.getElementById('planSemana').value.trim().toUpperCase();
+  const anio = parseInt(document.getElementById('planAnio').value) || new Date().getFullYear();
+  if (!/^W\s?\d{1,2}$/.test(semana)) { alert('Poné la semana en formato "W38" (arriba de todo, antes de la tabla).'); return; }
+
+  const filasValidas = App.planificador.filas.filter(f => f.puesto && f.dia && f.codigo);
+  if (!filasValidas.length) { alert('Agregá al menos un trabajo con puesto, día y código completos.'); return; }
+
+  // agrupar en bloques por puesto+turno+operario, preservando el orden de aparición
+  const bloques = [];
+  const indice = new Map();
+  for (const f of filasValidas) {
+    const key = f.puesto + '|' + f.turno + '|' + f.operario;
+    if (!indice.has(key)) {
+      indice.set(key, bloques.length);
+      bloques.push({ puesto: f.puesto, turno: f.turno, operario: f.operario, porDia: { LUNES: [], MARTES: [], 'MIÉRCOLES': [], JUEVES: [], VIERNES: [] } });
+    }
+    bloques[indice.get(key)].porDia[f.dia.toUpperCase()].push(f);
+  }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Hoja1');
+  ws.getCell(1, 1).value = semana.replace(/\s+/g, '');
+  ws.getCell(2, 1).value = 'LUNES'; ws.getCell(2, 3).value = 'MARTES'; ws.getCell(2, 5).value = 'MIÉRCOLES'; ws.getCell(2, 7).value = 'JUEVES'; ws.getCell(2, 9).value = 'VIERNES';
+
+  let row = 4;
+  for (const b of bloques) {
+    ws.getCell(row, 1).value = `TURNO: ${b.turno || 'MAÑANA'}`;
+    ws.getCell(row, 3).value = `OPERARIOS: ${b.operario || '(sin especificar)'}`;
+    ws.getCell(row, 6).value = `PUESTO: ${b.puesto}`;
+    row += 2; // la fila justo debajo del encabezado se deja vacía (el analizador siempre la ignora, es donde antes iban notas de insumos)
+    const maxLen = Math.max(0, ...DIAS_PLAN.map(d => b.porDia[d].length));
+    for (let i = 0; i < maxLen; i++) {
+      for (const d of DIAS_PLAN) {
+        const job = b.porDia[d][i];
+        if (!job) continue;
+        let texto = job.descripcion ? job.descripcion.trim() + '\n' : '';
+        texto += `${job.codigo} x${job.cantidad || 1}`;
+        const wos = separarWOsTexto(job.wo);
+        if (wos.length) texto += ` (${wos.map(w => 'WO-' + w).join('|')})`;
+        ws.getCell(row, DIA_COL_PLAN[d]).value = texto;
+      }
+      row++;
+    }
+    row++; // separador entre puestos
+  }
+  ws.columns.forEach(c => c.width = 22);
+
+  const buffer = await wb.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/octet-stream' }), `Plan_${semana}_${anio}.xlsx`);
+});
 
 
 /* ---------------------- UI: Configuración ---------------------- */
