@@ -143,6 +143,11 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 .chip-add-input{flex:1;background:var(--panel-alt);border:1px solid var(--border-soft);border-radius:7px;padding:8px 10px;font-size:12.5px;font-family:'Inter';color:var(--text);}
 .chip-add-ok{background:var(--brand);color:#241a00;padding:8px 12px;border-radius:7px;flex-shrink:0;}
 .chip-add-cancel{background:var(--panel-alt);color:var(--text-muted);border:1px solid var(--border-soft);width:30px;height:30px;border-radius:7px;flex-shrink:0;}
+.dates-block{font-size:11px;color:var(--text-muted);text-align:center;margin-bottom:10px;}
+.chart-box{background:var(--panel);border:1px solid var(--border-soft);border-radius:10px;box-shadow:var(--shadow);padding:16px;margin-bottom:14px;}
+.chart-title{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:12px;font-weight:600;}
+.stats-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+.chart-empty{font-size:12px;color:var(--text-muted);text-align:center;padding:20px;}
 </style>
 </head>
 <body>
@@ -180,6 +185,22 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 </div>
 <h3 class="subsection-title">Terminadas</h3>
 <div class="piece-list" id="extraFinishedList"></div>
+
+<h2 class="section-title">Estadísticas de retrabajos</h2>
+<div class="chip-picker" id="statsRangePicker" style="margin-bottom:14px"></div>
+<div class="stats-summary" id="statsSummary"></div>
+<div class="chart-box">
+<div class="chart-title">Cantidad de retrabajos por período</div>
+<canvas id="chartByTime" height="180"></canvas>
+</div>
+<div class="chart-box">
+<div class="chart-title">Solicitudes por área (producción, calidad, etc.)</div>
+<canvas id="chartByCategory" height="180"></canvas>
+</div>
+<div class="chart-box">
+<div class="chart-title">Tiempo dedicado a retrabajos, por área (horas)</div>
+<canvas id="chartTimeByCategory" height="180"></canvas>
+</div>
 </div>
 <!-- Modal: agregar / editar pieza -->
 <div class="overlay" id="createOverlay">
@@ -263,6 +284,7 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import Chart from "https://cdn.jsdelivr.net/npm/chart.js@4/+esm";
 const firebaseConfig = {
 apiKey: "AIzaSyAGfRsHlV_6xpzshygUWW13CEPRCflP9GE",
 authDomain: "panel-corte.firebaseapp.com",
@@ -464,6 +486,98 @@ function buildExtraName(p){
 const catLabel = (CATEGORIES.find(c=>c.id===p.category)||{}).label || 'Trabajo extra';
 return p.process ? `${catLabel} — ${p.process}` : catLabel;
 }
+/* ---------- estadísticas de retrabajos ---------- */
+const STATS_RANGES = [
+{id:'hoy', label:'Hoy'},
+{id:'semana', label:'Esta semana'},
+{id:'mes', label:'Este mes'},
+{id:'trimestre', label:'Últimos 3 meses'},
+{id:'todo', label:'Todo'}
+];
+let statsRange = 'mes';
+const chartInstances = {};
+function getRangeStart(rangeId){
+const now = new Date();
+if(rangeId==='hoy') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+if(rangeId==='semana'){
+const day = now.getDay();
+const diff = (day===0 ? 6 : day-1);
+return new Date(now.getFullYear(), now.getMonth(), now.getDate()-diff).getTime();
+}
+if(rangeId==='mes') return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+if(rangeId==='trimestre') return new Date(now.getFullYear(), now.getMonth()-3, now.getDate()).getTime();
+return null;
+}
+function renderStatsRangePicker(){
+const wrap = document.getElementById('statsRangePicker');
+wrap.innerHTML = '';
+STATS_RANGES.forEach(r=>{
+const chip = document.createElement('button');
+chip.type = 'button';
+chip.className = 'chip' + (statsRange===r.id ? ' selected' : '');
+chip.textContent = r.label;
+chip.onclick = ()=>{ statsRange = r.id; renderStatsRangePicker(); renderStatsCharts(); };
+wrap.appendChild(chip);
+});
+}
+function getBucketKey(ts, granularity){
+const d = new Date(ts);
+if(granularity==='day') return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
+if(granularity==='week'){
+const day = d.getDay();
+const diff = (day===0 ? 6 : day-1);
+const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate()-diff);
+return 'sem. ' + monday.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
+}
+return d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'});
+}
+function drawBarChart(canvasId, labels, data, label, color, decimals){
+const ctx = document.getElementById(canvasId);
+if(!ctx) return;
+if(chartInstances[canvasId]) chartInstances[canvasId].destroy();
+if(!labels.length){
+ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height);
+return;
+}
+chartInstances[canvasId] = new Chart(ctx, {
+type: 'bar',
+data: { labels, datasets: [{ label, data, backgroundColor: color, borderRadius: 4, maxBarThickness: 46 }] },
+options: {
+responsive: true,
+plugins: { legend: { display: false } },
+scales: { y: { beginAtZero: true, ticks: { precision: decimals ? 1 : 0 } } }
+}
+});
+}
+function renderStatsCharts(){
+const cutoff = getRangeStart(statsRange);
+const extras = pieces.filter(p=> (p.type||'pieza')==='extra' && (cutoff===null || (p.createdAt||0) >= cutoff));
+const finishedExtras = extras.filter(p=>p.status==='terminada');
+const totalMs = finishedExtras.reduce((sum,p)=> sum + (p.totalMs||0), 0);
+document.getElementById('statsSummary').innerHTML = `
+<div class="stat"><div class="n">${extras.length}</div><div class="l">Retrabajos cargados</div></div>
+<div class="stat done"><div class="n">${finishedExtras.length}</div><div class="l">Terminados</div></div>
+<div class="stat run"><div class="n">${formatDurationLong(totalMs)}</div><div class="l">Tiempo total</div></div>
+`;
+let granularity = 'day';
+if(statsRange==='trimestre') granularity = 'week';
+if(statsRange==='todo') granularity = 'month';
+const sortedByDate = extras.slice().sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
+const timeCounts = new Map();
+sortedByDate.forEach(p=>{
+const key = getBucketKey(p.createdAt||Date.now(), granularity);
+timeCounts.set(key, (timeCounts.get(key)||0)+1);
+});
+drawBarChart('chartByTime', Array.from(timeCounts.keys()), Array.from(timeCounts.values()), 'Retrabajos', '#5678a3');
+const catCounts = {}; CATEGORIES.forEach(c=> catCounts[c.id]=0);
+extras.forEach(p=>{ if(catCounts[p.category]!==undefined) catCounts[p.category]++; });
+const catLabels = CATEGORIES.map(c=> c.label.replace('Pieza de ',''));
+drawBarChart('chartByCategory', catLabels, CATEGORIES.map(c=> catCounts[c.id]), 'Solicitudes', '#cf9b3d');
+const catTime = {}; CATEGORIES.forEach(c=> catTime[c.id]=0);
+finishedExtras.forEach(p=>{ if(catTime[p.category]!==undefined) catTime[p.category] += (p.totalMs||0); });
+const catHours = CATEGORIES.map(c=> Math.round((catTime[c.id]||0)/3600000*10)/10);
+drawBarChart('chartTimeByCategory', catLabels, catHours, 'Horas', '#6ea675', true);
+}
 const params = new URLSearchParams(window.location.search);
 const isOperarioView = params.get('rol') === 'operario';
 function uid(prefix){ return (prefix||'id') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
@@ -581,6 +695,7 @@ renderActiveList();
 renderFinishedList();
 renderExtraActiveList();
 renderExtraFinishedList();
+renderStatsCharts();
 }
 function renderStats(){
 const soloPiezas = pieces.filter(p=>(p.type||'pieza')==='pieza');
@@ -681,6 +796,7 @@ toggleExpand(p.id);
 card.appendChild(row);
 const expand = document.createElement('div');
 expand.className = 'piece-expand';
+const datesBlock = `<div class="dates-block">Cargada: ${formatDate(p.createdAt) || '-'}${isFinished ? ' · Terminada: ' + formatDate(p.finishedAt) : ''}</div>`;
 const pdfBtn = type==='extra' ? '' : (p.hasPdf ? `<button class="btn-pdf" onclick="event.stopPropagation(); viewPdf('${p.id}')">📄 Visualizar PDF</button>` : `<div class="hint" style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px">Esta pieza no tiene plano cargado.</div>`);
 let timerBlock = '';
 let actionButtons = '';
@@ -712,6 +828,7 @@ const footerBtns = (type==='pieza' && isOperarioView) ? '' : `
 <button class="btn-ghost" style="color:var(--danger)" onclick="event.stopPropagation(); deletePieceConfirm('${p.id}')">🗑 Eliminar</button>
 </div>`;
 expand.innerHTML = `
+${datesBlock}
 ${timerBlock}
 ${pdfBtn}
 ${actionButtons}
@@ -1079,6 +1196,7 @@ openExtraModal, closeExtraModal, startEditExtra, submitExtra
 });
 loadPieces();
 loadExtraCatalog();
+renderStatsRangePicker();
 </script>
 </body>
 </html>
