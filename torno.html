@@ -281,10 +281,10 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 </div>
 </div>
 <div class="toast" id="toast"><span id="toastMsg"></span></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import Chart from "https://cdn.jsdelivr.net/npm/chart.js@4/+esm";
 const firebaseConfig = {
 apiKey: "AIzaSyAGfRsHlV_6xpzshygUWW13CEPRCflP9GE",
 authDomain: "panel-corte.firebaseapp.com",
@@ -534,12 +534,23 @@ return d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'});
 function drawBarChart(canvasId, labels, data, label, color, decimals){
 const ctx = document.getElementById(canvasId);
 if(!ctx) return;
+if(typeof window.Chart === 'undefined'){
+if(!ctx.dataset.warned){
+const wrap = ctx.parentElement;
+const msg = document.createElement('div');
+msg.className = 'chart-empty';
+msg.textContent = 'No se pudieron cargar los gráficos (sin conexión al CDN).';
+wrap.appendChild(msg);
+ctx.dataset.warned = '1';
+}
+return;
+}
 if(chartInstances[canvasId]) chartInstances[canvasId].destroy();
 if(!labels.length){
 ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height);
 return;
 }
-chartInstances[canvasId] = new Chart(ctx, {
+chartInstances[canvasId] = new window.Chart(ctx, {
 type: 'bar',
 data: { labels, datasets: [{ label, data, backgroundColor: color, borderRadius: 4, maxBarThickness: 46 }] },
 options: {
@@ -550,6 +561,7 @@ scales: { y: { beginAtZero: true, ticks: { precision: decimals ? 1 : 0 } } }
 });
 }
 function renderStatsCharts(){
+try{
 const cutoff = getRangeStart(statsRange);
 const extras = pieces.filter(p=> (p.type||'pieza')==='extra' && (cutoff===null || (p.createdAt||0) >= cutoff));
 const finishedExtras = extras.filter(p=>p.status==='terminada');
@@ -577,6 +589,9 @@ const catTime = {}; CATEGORIES.forEach(c=> catTime[c.id]=0);
 finishedExtras.forEach(p=>{ if(catTime[p.category]!==undefined) catTime[p.category] += (p.totalMs||0); });
 const catHours = CATEGORIES.map(c=> Math.round((catTime[c.id]||0)/3600000*10)/10);
 drawBarChart('chartTimeByCategory', catLabels, catHours, 'Horas', '#6ea675', true);
+}catch(e){
+console.error('Error dibujando estadísticas:', e);
+}
 }
 const params = new URLSearchParams(window.location.search);
 const isOperarioView = params.get('rol') === 'operario';
