@@ -283,6 +283,7 @@ table tr:hover td{background:#fbf9f3;}
         </div>
       </div>
       <div class="kpi-grid" id="cruceKpis"></div>
+      <div id="cruceAlarmaMapeo" style="display:none;" class="warnbox"></div>
     </div>
 
     <div class="panel">
@@ -411,7 +412,7 @@ table tr:hover td{background:#fbf9f3;}
       <button class="btn secondary small" id="btnBackup">Descargar copia de seguridad (JSON)</button>
       <button class="btn secondary small" id="btnRestore">Restaurar copia de seguridad</button>
       <input type="file" id="restoreInput" accept=".json" style="display:none;">
-      <button class="btn secondary small" id="btnClearAll" style="border-color:var(--bad);color:var(--bad);">Borrar todo el histórico</button>
+      <button class="btn secondary small" id="btnClearAll" style="border-color:var(--bad);color:var(--bad);">Eliminar todo el historial</button>
     </div>
   </div>
 </section>
@@ -778,6 +779,10 @@ function centrosParaPuesto(puestoTexto, puestoMapping) {
 /* ---------------------- Cruce: Excel semanal vs NetSuite ---------------------- */
 /** Separa un texto de WO que puede traer varios juntos, ej. "108515|111159" -> ["108515","111159"]. */
 function separarWOs(woTexto) { return String(woTexto || '').split('|').map(s => s.trim()).filter(Boolean); }
+/** Un puesto puede tener dos operarios turnándose (ej. "FERREYRA/BUSON" = mañana/tarde). El Excel
+ *  no distingue qué trabajo puntual hizo cada uno, así que ambos quedan acreditados por ese trabajo
+ *  en sus estadísticas individuales — mejor así que perderlo o inventar a cuál de los dos le tocó. */
+function separarOperarios(s) { return String(s || '').split('/').map(x => x.trim()).filter(Boolean); }
 
 const Cruce = {
   ejecutar(excelRecords, netsuiteRows, puestoMapping) {
@@ -850,7 +855,18 @@ const Cruce = {
       if (usadas.has(row)) continue;
       soloEnNetsuite.push(row);
     }
-    return { pendientesADeclarar, declaradoDeMas, coincide, yaDeclarado, soloEnNetsuite };
+
+    // Alarma de mapeo roto: puestos cuyos centros de trabajo NO aparecen NI UNA VEZ en todo
+    // el archivo de NetSuite (ni siquiera fuera de las coincidencias por código+WO). Si un
+    // puesto lleva cruces enteros sin encontrar absolutamente nada, lo más probable es que el
+    // nombre del centro esté mal mapeado en Configuración, no que justo no tenga nada pendiente.
+    const puestosVistos = new Set(excelRecords.map(r => r.puesto));
+    const puestosSinMapeo = [...puestosVistos].filter(puesto => {
+      const codigos = centrosParaPuesto(puesto, puestoMapping);
+      return codigos.length === 0 || !netsuiteRows.some(row => centroCoincideConPuesto(row.centroNormalizado, codigos));
+    });
+
+    return { pendientesADeclarar, declaradoDeMas, coincide, yaDeclarado, soloEnNetsuite, puestosSinMapeo };
   }
 };
 
@@ -886,6 +902,16 @@ const Calc = {
       if (rec.estado === 'PENDIENTE' || rec.estado === 'PARCIAL') g.pendientesN++;
     }
     return [...map.values()].map(g => ({ ...g, cumplimiento: g.planificada > 0 ? g.realizada / g.planificada * 100 : 0 }));
+  },
+  /** Como groupBy, pero por operario: si un puesto tiene dos operarios turnándose (ej. "FERREYRA/BUSON"),
+   *  el mismo trabajo se acredita a cada uno por separado (no sabemos, celda a celda, a cuál de los dos
+   *  le tocó) — mejor eso que perder el dato o dejarlos agrupados como si fueran una sola persona. */
+  groupByOperario(records) {
+    const expandido = [];
+    for (const rec of records) {
+      for (const nombre of separarOperarios(rec.operario)) expandido.push({ ...rec, operario: nombre });
+    }
+    return this.groupBy(expandido, r => r.operario);
   },
   pendientesCodigo(records) {
     return this.groupBy(records.filter(r => (r.cantidad_pendiente || 0) > 0), r => r.codigo)
@@ -1292,6 +1318,14 @@ function renderCruceResultados(r) {
     ['Pendiente en NetSuite, no pintado en el Excel', r.soloEnNetsuite.length, '']
   ]);
 
+  const alarma = document.getElementById('cruceAlarmaMapeo');
+  if (r.puestosSinMapeo && r.puestosSinMapeo.length) {
+    alarma.style.display = 'block';
+    alarma.innerHTML = `⚠ <b>Posible mapeo roto:</b> estos puestos no encontraron NADA en todo el archivo de NetSuite (ni una fila, en ninguna semana), lo cual es raro si vienen trabajando normalmente — probablemente el nombre del centro de trabajo esté mal configurado: <b>${r.puestosSinMapeo.map(escapeHtml).join(', ')}</b>. Revisalo en Configuración → Mapeo de puestos.`;
+  } else {
+    alarma.style.display = 'none';
+  }
+
   document.querySelector('#tblPendDeclarar tbody').innerHTML = r.pendientesADeclarar.map((x, i) =>
     `<tr><td><input type="checkbox" class="chkDeclarar" data-idx="${i}"></td><td>${x.codigo}</td><td>${x.wo}</td><td>${x.puesto}</td><td>${x.operario}</td><td>${escapeHtml(x.mensaje)}</td></tr>`).join('') ||
     `<tr><td colspan="6" class="muted" style="text-align:center;padding:16px;">Ninguno — todo lo pintado como hecho ya está declarado en NetSuite. 🎉</td></tr>`;
@@ -1386,7 +1420,7 @@ function renderDashboard() {
     `<div class="kpi ${c}"><div class="val">${v}</div><div class="lbl">${l}</div></div>`).join('');
 
   renderCharts(records);
-  renderGroupTable('tblOperarios', Calc.groupBy(records, x => x.operario), 'Operario');
+  renderGroupTable('tblOperarios', Calc.groupByOperario(records), 'Operario');
   renderGroupTable('tblPuestos', Calc.groupBy(records, x => x.puesto), 'Puesto');
 
   const revisarPanel = document.getElementById('panelRevisar');
@@ -1430,7 +1464,7 @@ function renderCharts(records) {
     { label: 'Realizada', data: byPuesto.map(g => g.realizada), color: '#3fa66a' }
   ]);
 
-  const byOp = Calc.groupBy(records, x => x.operario);
+  const byOp = Calc.groupByOperario(records);
   drawBar('chartOperario', byOp.map(g => g.key), [{ label: '% Cumplimiento', data: byOp.map(g => +g.cumplimiento.toFixed(1)), color: '#8b6fce' }]);
 
   const pend = Calc.pendientesCodigo(records).slice(0, 10);
@@ -1664,7 +1698,7 @@ function q_pendientesRecurrentes() {
   return tableHtml(['Código', 'Descripción', 'WO', 'Nº semanas pendiente', 'Semanas', 'Pendiente actual'], rows);
 }
 function q_operarioFaltantes() {
-  const g = Calc.groupBy(Store.allRecords(), r => r.operario).sort((a, b) => b.pendiente - a.pendiente);
+  const g = Calc.groupByOperario(Store.allRecords()).sort((a, b) => b.pendiente - a.pendiente);
   return tableHtml(['Operario', 'Piezas pendientes (acumulado histórico)', 'Trabajos con pendiente', 'Cumplimiento'],
     g.map(x => [x.key, x.pendiente, x.pendientesN, x.cumplimiento.toFixed(1) + '%']));
 }
@@ -1727,9 +1761,9 @@ function doSearch() {
 function renderOperariosView() {
   const data = Store.load();
   const nombres = new Set([
-    ...Store.allRecords().map(r => r.operario).filter(Boolean),
+    ...Store.allRecords().flatMap(r => separarOperarios(r.operario)),
     ...Object.keys(data.operarios),
-    ...data.cruces.flatMap(c => [...c.pendientesADeclarar, ...c.declaradoDeMas].map(x => x.operario)).filter(Boolean)
+    ...data.cruces.flatMap(c => [...c.pendientesADeclarar, ...c.declaradoDeMas].flatMap(x => separarOperarios(x.operario)))
   ]);
   const sel = document.getElementById('operarioSelect');
   const actual = sel.value;
@@ -1766,9 +1800,9 @@ function renderOperarioDetalle(nombre) {
     renderOperarioDetalle(nombre);
   };
 
-  const records = Store.allRecords().filter(r => r.operario === nombre);
+  const records = Store.allRecords().filter(r => separarOperarios(r.operario).includes(nombre));
   const resumen = Calc.resumenSemana(records);
-  const declarar = data.cruces.flatMap(c => c.pendientesADeclarar.filter(x => x.operario === nombre).map(x => ({ ...x, semana: c.semana, anio: c.anio, guardado: c.guardado })));
+  const declarar = data.cruces.flatMap(c => c.pendientesADeclarar.filter(x => separarOperarios(x.operario).includes(nombre)).map(x => ({ ...x, semana: c.semana, anio: c.anio, guardado: c.guardado })));
   document.getElementById('operarioKpis').innerHTML = kpiGridHtml([
     ['Trabajos registrados', records.length, ''],
     ['Piezas realizadas', resumen.piezasRealizadas, 'ok'],
@@ -1787,8 +1821,11 @@ function renderOperarioDetalle(nombre) {
     drawBar('chartOperarioDeclarar', mesesDeclarar.map(etiquetaMes), [{ label: 'Veces sin declarar', data: mesesDeclarar.map(m => declararPorMes.get(m)), color: '#e0503a' }]);
   }
 
-  document.querySelector('#tblOperarioTrabajos tbody').innerHTML = records.sort((a, b) => weekSortKey(b) - weekSortKey(a)).slice(0, 200).map(r =>
-    `<tr><td>${r.semana} (${r.anio})</td><td>${r.codigo}</td><td>${r.wo || ''}</td><td>${r.puesto}</td><td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`).join('');
+  document.querySelector('#tblOperarioTrabajos tbody').innerHTML = records.sort((a, b) => weekSortKey(b) - weekSortKey(a)).slice(0, 200).map(r => {
+    const compartido = separarOperarios(r.operario).length > 1;
+    const puesto = escapeHtml(r.puesto) + (compartido ? ` <span class="muted" title="Trabajo de un puesto compartido: ${escapeHtml(r.operario)}">(compartido)</span>` : '');
+    return `<tr><td>${r.semana} (${r.anio})</td><td>${r.codigo}</td><td>${r.wo || ''}</td><td>${puesto}</td><td>${r.cantidad_planificada}</td><td>${r.cantidad_realizada}</td><td>${r.cantidad_pendiente}</td><td><span class="badge ${r.estado}">${r.estado}</span></td></tr>`;
+  }).join('');
 }
 
 /** Aproxima a qué mes calendario corresponde una semana (a partir del lunes de esa semana ISO). Devuelve clave "AAAA-MM" ordenable. */
@@ -1869,7 +1906,11 @@ document.getElementById('restoreInput').addEventListener('change', async e => {
   } catch (err) { alert('No se pudo restaurar: ' + err.message); }
 });
 document.getElementById('btnClearAll').addEventListener('click', () => {
-  if (confirm('Esto borra TODO el histórico guardado en esta PC. ¿Continuar?')) { Store.save({ semanas: [], manualEntries: [] }); renderDashboard(); renderHistoricoView(); }
+  if (!confirm('Esto borra TODO lo guardado en esta PC: semanas, pendientes marcados a mano, cruces con NetSuite y perfiles de operarios. No se puede deshacer. ¿Continuar?')) return;
+  if (!confirm('Confirmá de nuevo: ¿realmente querés borrar todo el historial?')) return;
+  Store.save({ semanas: [], manualEntries: [], cruces: [], operarios: {} });
+  renderDashboard(); renderHistoricoView();
+  alert('Historial borrado.');
 });
 
 /* ---------------------- 7. EXPORTACIÓN ---------------------- */
@@ -1899,7 +1940,7 @@ async function doExport(type) {
     addRecordsSheet(wb, 'Pendientes', recs.filter(r => (r.cantidad_pendiente || 0) > 0));
     filename = 'pendientes.xlsx';
   } else if (type === 'operarios') {
-    addGroupSheet(wb, 'Operarios', Calc.groupBy(records, r => r.operario), 'Operario');
+    addGroupSheet(wb, 'Operarios', Calc.groupByOperario(records), 'Operario');
     filename = `operarios_${(currentWeek || {}).semana || ''}.xlsx`;
   } else if (type === 'puestos') {
     addGroupSheet(wb, 'Puestos', Calc.groupBy(records, r => r.puesto), 'Puesto');
