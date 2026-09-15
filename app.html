@@ -205,7 +205,7 @@ table tr:hover td{background:#fbf9f3;}
     <p class="muted" id="planHint"></p>
     <div class="table-wrap" style="max-height:520px;">
       <table id="tblPlanificador">
-        <thead><tr><th style="min-width:150px;">Puesto</th><th style="min-width:110px;">Turno</th><th style="min-width:140px;">Operario(s)</th><th style="min-width:115px;">Día</th><th style="min-width:110px;">Código</th><th style="min-width:170px;">Descripción</th><th style="min-width:75px;">Cant.</th><th style="min-width:130px;">WO</th><th></th></tr></thead>
+        <thead><tr><th style="min-width:150px;">Puesto</th><th style="min-width:110px;">Turno</th><th style="min-width:140px;">Operario(s)</th><th style="min-width:115px;">Día</th><th style="min-width:150px;">Lote / Kit</th><th style="min-width:110px;">Código</th><th style="min-width:170px;">Descripción</th><th style="min-width:75px;">Cant.</th><th style="min-width:130px;">WO</th><th></th></tr></thead>
         <tbody id="tblPlanificadorBody"></tbody>
       </table>
     </div>
@@ -216,6 +216,7 @@ table tr:hover td{background:#fbf9f3;}
   <datalist id="dlPlanPuestos"></datalist>
   <datalist id="dlPlanOperarios"></datalist>
   <datalist id="dlPlanTurnos"></datalist>
+  <datalist id="dlPlanLotes"></datalist>
 </section>
 
 <!-- ============ VISTA: DASHBOARD ============ -->
@@ -390,7 +391,10 @@ table tr:hover td{background:#fbf9f3;}
     <div class="table-wrap">
       <table id="tblHistoricoSemanas"><thead><tr><th>Semana</th><th>Año</th><th>Trabajos</th><th>Cumplimiento</th><th>Guardada</th><th></th></tr></thead><tbody></tbody></table>
     </div>
-    <div class="export-row"><button class="btn secondary small" data-export="historico">Exportar histórico completo</button></div>
+    <div class="export-row">
+      <button class="btn secondary small" data-export="historico">Exportar histórico completo</button>
+      <button class="btn secondary small" id="btnClearAllHistorico" style="border-color:var(--bad);color:var(--bad);">Eliminar todo el historial</button>
+    </div>
   </div>
 
   <div class="panel">
@@ -1890,7 +1894,7 @@ const DIAS_PLAN = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES'];
 const DIA_COL_PLAN = { LUNES: 1, MARTES: 3, 'MIÉRCOLES': 5, JUEVES: 7, VIERNES: 9 };
 
 function nuevaFilaPlan(datos) {
-  return { puesto: '', turno: '', operario: '', dia: '', codigo: '', descripcion: '', cantidad: '', wo: '', ...datos };
+  return { puesto: '', turno: '', operario: '', dia: '', lote: '', codigo: '', descripcion: '', cantidad: '', wo: '', ...datos };
 }
 function cargarBorradorPlan() {
   try {
@@ -1925,6 +1929,8 @@ function renderPlanificadorView() {
   document.getElementById('dlPlanPuestos').innerHTML = [...puestos].sort().map(p => `<option value="${escapeHtml(p)}">`).join('');
   document.getElementById('dlPlanOperarios').innerHTML = [...operarios].sort().map(o => `<option value="${escapeHtml(o)}">`).join('');
   document.getElementById('dlPlanTurnos').innerHTML = [...turnos].sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
+  const lotes = new Set(App.planificador.filas.map(f => f.lote).filter(Boolean));
+  document.getElementById('dlPlanLotes').innerHTML = [...lotes].sort().map(l => `<option value="${escapeHtml(l)}">`).join('');
 
   if (!App.planificador.filas.length) App.planificador.filas.push(nuevaFilaPlan());
   drawPlanificadorTable();
@@ -1941,6 +1947,7 @@ function drawPlanificadorTable() {
     <td>${inp(idx, 'turno', 'MAÑANA', 'dlPlanTurnos')}</td>
     <td>${inp(idx, 'operario', 'FERREYRA/BUSON', 'dlPlanOperarios')}</td>
     <td><select class="plan-input" data-idx="${idx}" data-campo="dia"><option value="">-</option>${DIAS_PLAN.map(d => `<option value="${d}" ${f.dia === d ? 'selected' : ''}>${d.charAt(0) + d.slice(1).toLowerCase()}</option>`).join('')}</select></td>
+    <td>${inp(idx, 'lote', 'ej: ATF U448 x14 (AGO)', 'dlPlanLotes')}</td>
     <td>${inp(idx, 'codigo', 'H0001849')}</td>
     <td>${inp(idx, 'descripcion', 'opcional')}</td>
     <td><input class="plan-input" type="number" min="0" data-idx="${idx}" data-campo="cantidad" value="${escapeHtml(String(f.cantidad || ''))}"></td>
@@ -1979,7 +1986,7 @@ function actualizarPlanHint() {
 document.getElementById('btnPlanAgregarFila').addEventListener('click', () => {
   const ultima = App.planificador.filas[App.planificador.filas.length - 1];
   // arranca la fila nueva con el mismo puesto/turno/operario que la anterior: al planificar se cargan varios trabajos seguidos del mismo puesto
-  App.planificador.filas.push(nuevaFilaPlan(ultima ? { puesto: ultima.puesto, turno: ultima.turno, operario: ultima.operario, dia: ultima.dia } : {}));
+  App.planificador.filas.push(nuevaFilaPlan(ultima ? { puesto: ultima.puesto, turno: ultima.turno, operario: ultima.operario, dia: ultima.dia, lote: ultima.lote } : {}));
   guardarBorradorPlan();
   drawPlanificadorTable();
 });
@@ -2023,7 +2030,9 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
   const validas = filasPlanValidas();
   if (!validas.length) { alert('Agregá al menos un trabajo con puesto, día y código completos.'); return; }
 
-  // Agrupar en bloques por puesto+turno+operario, respetando el orden de carga
+  // Agrupar en bloques por puesto+turno+operario, respetando el orden de carga. Dentro de cada
+  // bloque, cada día es una lista de "líneas": cuando cambia el lote/kit, se inserta un título
+  // antes del grupo de trabajos de ese lote (igual que en la planilla real).
   const bloques = [];
   const indice = new Map();
   for (const f of validas) {
@@ -2031,11 +2040,16 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
     if (!indice.has(key)) {
       indice.set(key, bloques.length);
       const porDia = {};
-      DIAS_PLAN.forEach(d => porDia[d] = []);
+      DIAS_PLAN.forEach(d => porDia[d] = { lineas: [], ultimoLote: null });
       bloques.push({ puesto: f.puesto, turno: f.turno, operario: f.operario, porDia });
     }
     const dia = f.dia.toUpperCase();
-    if (bloques[indice.get(key)].porDia[dia]) bloques[indice.get(key)].porDia[dia].push(f);
+    const pd = bloques[indice.get(key)].porDia[dia];
+    if (!pd) continue;
+    const lote = (f.lote || '').trim();
+    if (lote && lote !== pd.ultimoLote) pd.lineas.push({ tipo: 'lote', texto: lote });
+    pd.ultimoLote = lote || null;
+    pd.lineas.push({ tipo: 'job', job: f });
   }
 
   // --- estilos reutilizables ---
@@ -2122,20 +2136,25 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
     filaNotas.height = 18;
     row += 2;
 
-    const maxLen = Math.max(0, ...DIAS_PLAN.map(d => b.porDia[d].length));
+    const maxLen = Math.max(0, ...DIAS_PLAN.map(d => b.porDia[d].lineas.length));
     for (let i = 0; i < maxLen; i++) {
       for (const d of DIAS_PLAN) {
         const col = DIA_COL_PLAN[d];
-        const job = b.porDia[d][i];
+        const linea = b.porDia[d].lineas[i];
         const cell = ws.getCell(row, col);
-        if (job) {
+        if (linea && linea.tipo === 'lote') {
+          cell.value = linea.texto;
+          cell.font = { bold: true, underline: true, size: 10.5, color: { argb: AZUL } };
+          cell.fill = relleno('FFFCEACB'); // resalta el título del lote/kit sin presuponer un estado de color (verde/rojo/etc)
+        } else if (linea && linea.tipo === 'job') {
+          const job = linea.job;
           let texto = job.descripcion && job.descripcion.trim() ? job.descripcion.trim() + '\n' : '';
           texto += `${job.codigo.trim()} x${job.cantidad || 1}`;
           const wos = separarWOsTexto(job.wo);
           if (wos.length) texto += `\n(${wos.map(w => 'WO-' + w).join('|')})`;
           cell.value = texto;
         }
-        cell.alignment = { wrapText: true, vertical: 'top' };
+        cell.alignment = { wrapText: true, horizontal: 'center', vertical: 'middle' };
         cell.border = borde;
         ws.getCell(row, col + 1).border = borde; // la columna "T" de al lado
       }
@@ -2211,13 +2230,15 @@ document.getElementById('restoreInput').addEventListener('change', async e => {
     renderHistoricoView();
   } catch (err) { alert('No se pudo restaurar: ' + err.message); }
 });
-document.getElementById('btnClearAll').addEventListener('click', () => {
+document.getElementById('btnClearAll').addEventListener('click', eliminarTodoElHistorial);
+document.getElementById('btnClearAllHistorico').addEventListener('click', eliminarTodoElHistorial);
+function eliminarTodoElHistorial() {
   if (!confirm('Esto borra TODO lo guardado en esta PC: semanas, pendientes marcados a mano, cruces con NetSuite y perfiles de operarios. No se puede deshacer. ¿Continuar?')) return;
   if (!confirm('Confirmá de nuevo: ¿realmente querés borrar todo el historial?')) return;
   Store.save({ semanas: [], manualEntries: [], cruces: [], operarios: {} });
   renderDashboard(); renderHistoricoView();
   alert('Historial borrado.');
-});
+}
 
 /* ---------------------- 7. EXPORTACIÓN ---------------------- */
 async function doExport(type) {
