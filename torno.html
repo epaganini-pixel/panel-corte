@@ -187,7 +187,8 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 <div class="piece-list" id="extraFinishedList"></div>
 
 <h2 class="section-title">Estadísticas de retrabajos</h2>
-<div class="chip-picker" id="statsRangePicker" style="margin-bottom:14px"></div>
+<div class="chip-picker" id="statsRangePicker" style="margin-bottom:10px"></div>
+<div class="chip-picker" id="statsViewPicker" style="margin-bottom:14px"></div>
 <div class="stats-summary" id="statsSummary"></div>
 <div class="chart-box">
 <div class="chart-title">Cantidad de retrabajos por período</div>
@@ -258,6 +259,10 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 <button class="close-x" onclick="closeExtraModal()">✕</button>
 <h2 id="extraModalTitle">Nuevo trabajo extra</h2>
 <div class="modal-sub">Elegí las opciones. Solo hace falta escribir la primera vez que se usa una opción nueva.</div>
+<div class="field">
+<label>Motivo</label>
+<div class="chip-picker" id="extraMotivoPicker"></div>
+</div>
 <div class="field">
 <label>Tipo de trabajo</label>
 <div class="chip-picker" id="extraCategoryPicker"></div>
@@ -358,6 +363,10 @@ pendingColor = c;
 renderColorPicker(c);
 }
 /* ---------- trabajos extras / retrabajos ---------- */
+const MOTIVOS = [
+{id:'retrabajo', label:'Pieza de retrabajo', color:'#5678a3'},
+{id:'solicitada', label:'Pieza solicitada', color:'#cf9b3d'}
+];
 const CATEGORIES = [
 {id:'produccion', label:'Pieza de Producción'},
 {id:'calidad', label:'Pieza de Calidad'},
@@ -367,6 +376,7 @@ const CATEGORIES = [
 const BASE_PROCESOS = ['Mecanizado','Soldadura','Armado de Cilindros'];
 let customProcesos = [];
 let solicitantes = [];
+let extraMotivo = null;
 let extraCategory = null;
 let extraProcess = null;
 let extraSolicitante = null;
@@ -410,6 +420,18 @@ input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); 
 row.appendChild(input); row.appendChild(ok); row.appendChild(cancel);
 setTimeout(()=> input.focus(), 30);
 return row;
+}
+function renderExtraMotivoPicker(){
+const wrap = document.getElementById('extraMotivoPicker');
+wrap.innerHTML = '';
+MOTIVOS.forEach(m=>{
+const chip = document.createElement('button');
+chip.type = 'button';
+chip.className = 'chip' + (extraMotivo===m.id ? ' selected' : '');
+chip.textContent = m.label;
+chip.onclick = ()=>{ extraMotivo = m.id; renderExtraMotivoPicker(); };
+wrap.appendChild(chip);
+});
 }
 function renderExtraCategoryPicker(){
 const wrap = document.getElementById('extraCategoryPicker');
@@ -483,8 +505,10 @@ addChip.onclick = ()=>{ addingSolicitanteInline = true; renderExtraSolicitantePi
 wrap.appendChild(addChip);
 }
 function buildExtraName(p){
+const motivoLabel = (MOTIVOS.find(m=>m.id===p.motivo)||{}).label || '';
 const catLabel = (CATEGORIES.find(c=>c.id===p.category)||{}).label || 'Trabajo extra';
-return p.process ? `${catLabel} — ${p.process}` : catLabel;
+const base = p.process ? `${catLabel} — ${p.process}` : catLabel;
+return motivoLabel ? `${motivoLabel}: ${base}` : base;
 }
 /* ---------- estadísticas de retrabajos ---------- */
 const STATS_RANGES = [
@@ -494,7 +518,12 @@ const STATS_RANGES = [
 {id:'trimestre', label:'Últimos 3 meses'},
 {id:'todo', label:'Todo'}
 ];
+const STATS_VIEWS = [
+{id:'total', label:'Total'},
+{id:'separado', label:'Por motivo (retrabajo / solicitada)'}
+];
 let statsRange = 'mes';
+let statsView = 'total';
 const chartInstances = {};
 function getRangeStart(rangeId){
 const now = new Date();
@@ -520,6 +549,18 @@ chip.onclick = ()=>{ statsRange = r.id; renderStatsRangePicker(); renderStatsCha
 wrap.appendChild(chip);
 });
 }
+function renderStatsViewPicker(){
+const wrap = document.getElementById('statsViewPicker');
+wrap.innerHTML = '';
+STATS_VIEWS.forEach(v=>{
+const chip = document.createElement('button');
+chip.type = 'button';
+chip.className = 'chip' + (statsView===v.id ? ' selected' : '');
+chip.textContent = v.label;
+chip.onclick = ()=>{ statsView = v.id; renderStatsViewPicker(); renderStatsCharts(); };
+wrap.appendChild(chip);
+});
+}
 function getBucketKey(ts, granularity){
 const d = new Date(ts);
 if(granularity==='day') return d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
@@ -531,7 +572,7 @@ return 'sem. ' + monday.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit
 }
 return d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'});
 }
-function drawBarChart(canvasId, labels, data, label, color, decimals){
+function drawBarChart(canvasId, labels, datasets, decimals){
 const ctx = document.getElementById(canvasId);
 if(!ctx) return;
 if(typeof window.Chart === 'undefined'){
@@ -552,43 +593,81 @@ return;
 }
 chartInstances[canvasId] = new window.Chart(ctx, {
 type: 'bar',
-data: { labels, datasets: [{ label, data, backgroundColor: color, borderRadius: 4, maxBarThickness: 46 }] },
+data: { labels, datasets: datasets.map(d=>({ label: d.label, data: d.data, backgroundColor: d.color, borderRadius: 4, maxBarThickness: datasets.length>1 ? 32 : 46 })) },
 options: {
 responsive: true,
-plugins: { legend: { display: false } },
+plugins: { legend: { display: datasets.length>1 } },
 scales: { y: { beginAtZero: true, ticks: { precision: decimals ? 1 : 0 } } }
 }
 });
 }
+function motivoOf(p){ return p.motivo || 'retrabajo'; }
 function renderStatsCharts(){
 try{
 const cutoff = getRangeStart(statsRange);
 const extras = pieces.filter(p=> (p.type||'pieza')==='extra' && (cutoff===null || (p.createdAt||0) >= cutoff));
 const finishedExtras = extras.filter(p=>p.status==='terminada');
 const totalMs = finishedExtras.reduce((sum,p)=> sum + (p.totalMs||0), 0);
+const countRetrabajo = extras.filter(p=> motivoOf(p)==='retrabajo').length;
+const countSolicitada = extras.filter(p=> motivoOf(p)==='solicitada').length;
 document.getElementById('statsSummary').innerHTML = `
-<div class="stat"><div class="n">${extras.length}</div><div class="l">Retrabajos cargados</div></div>
+<div class="stat"><div class="n">${extras.length}</div><div class="l">Total cargados</div></div>
+<div class="stat"><div class="n">${countRetrabajo}</div><div class="l">Retrabajos</div></div>
+<div class="stat"><div class="n">${countSolicitada}</div><div class="l">Solicitadas</div></div>
 <div class="stat done"><div class="n">${finishedExtras.length}</div><div class="l">Terminados</div></div>
 <div class="stat run"><div class="n">${formatDurationLong(totalMs)}</div><div class="l">Tiempo total</div></div>
 `;
 let granularity = 'day';
 if(statsRange==='trimestre') granularity = 'week';
 if(statsRange==='todo') granularity = 'month';
+const split = (statsView === 'separado');
+const motivoLabel = id => (MOTIVOS.find(m=>m.id===id)||{}).label || id;
+const motivoColor = id => (MOTIVOS.find(m=>m.id===id)||{}).color || '#5678a3';
+/* gráfico 1: cantidad por período */
 const sortedByDate = extras.slice().sort((a,b)=> (a.createdAt||0)-(b.createdAt||0));
+if(split){
+const keysOrder = [];
+const counts = {retrabajo:{}, solicitada:{}};
+sortedByDate.forEach(p=>{
+const key = getBucketKey(p.createdAt||Date.now(), granularity);
+if(keysOrder.indexOf(key)===-1) keysOrder.push(key);
+const m = motivoOf(p);
+counts[m][key] = (counts[m][key]||0)+1;
+});
+drawBarChart('chartByTime', keysOrder, MOTIVOS.map(m=>({ label: m.label, data: keysOrder.map(k=> counts[m.id][k]||0), color: m.color })));
+}else{
 const timeCounts = new Map();
 sortedByDate.forEach(p=>{
 const key = getBucketKey(p.createdAt||Date.now(), granularity);
 timeCounts.set(key, (timeCounts.get(key)||0)+1);
 });
-drawBarChart('chartByTime', Array.from(timeCounts.keys()), Array.from(timeCounts.values()), 'Retrabajos', '#5678a3');
+drawBarChart('chartByTime', Array.from(timeCounts.keys()), [{ label:'Retrabajos', data: Array.from(timeCounts.values()), color:'#5678a3' }]);
+}
+/* gráfico 2: solicitudes por área */
+const catLabels = CATEGORIES.map(c=> c.label.replace('Pieza de ',''));
+if(split){
+const catByMotivo = {retrabajo:{}, solicitada:{}};
+CATEGORIES.forEach(c=>{ catByMotivo.retrabajo[c.id]=0; catByMotivo.solicitada[c.id]=0; });
+extras.forEach(p=>{ const m = motivoOf(p); if(catByMotivo[m][p.category]!==undefined) catByMotivo[m][p.category]++; });
+drawBarChart('chartByCategory', catLabels, MOTIVOS.map(m=>({ label: m.label, data: CATEGORIES.map(c=> catByMotivo[m.id][c.id]), color: m.color })));
+}else{
 const catCounts = {}; CATEGORIES.forEach(c=> catCounts[c.id]=0);
 extras.forEach(p=>{ if(catCounts[p.category]!==undefined) catCounts[p.category]++; });
-const catLabels = CATEGORIES.map(c=> c.label.replace('Pieza de ',''));
-drawBarChart('chartByCategory', catLabels, CATEGORIES.map(c=> catCounts[c.id]), 'Solicitudes', '#cf9b3d');
+drawBarChart('chartByCategory', catLabels, [{ label:'Solicitudes', data: CATEGORIES.map(c=> catCounts[c.id]), color:'#cf9b3d' }]);
+}
+/* gráfico 3: tiempo dedicado por área */
+if(split){
+const timeByMotivo = {retrabajo:{}, solicitada:{}};
+CATEGORIES.forEach(c=>{ timeByMotivo.retrabajo[c.id]=0; timeByMotivo.solicitada[c.id]=0; });
+finishedExtras.forEach(p=>{ const m = motivoOf(p); if(timeByMotivo[m][p.category]!==undefined) timeByMotivo[m][p.category] += (p.totalMs||0); });
+const toHours = obj => CATEGORIES.map(c=> Math.round((obj[c.id]||0)/3600000*10)/10);
+drawBarChart('chartTimeByCategory', catLabels, MOTIVOS.map(m=>({ label: m.label+' (h)', data: toHours(timeByMotivo[m.id]), color: m.color })), true);
+}else{
 const catTime = {}; CATEGORIES.forEach(c=> catTime[c.id]=0);
 finishedExtras.forEach(p=>{ if(catTime[p.category]!==undefined) catTime[p.category] += (p.totalMs||0); });
 const catHours = CATEGORIES.map(c=> Math.round((catTime[c.id]||0)/3600000*10)/10);
-drawBarChart('chartTimeByCategory', catLabels, catHours, 'Horas', '#6ea675', true);
+drawBarChart('chartTimeByCategory', catLabels, [{ label:'Horas', data: catHours, color:'#6ea675' }], true);
+}
 }catch(e){
 console.error('Error dibujando estadísticas:', e);
 }
@@ -796,7 +875,7 @@ ${iconHtml}
 <div class="piece-name">${p.color ? `<span class="color-dot" style="background:${p.color}"></span> ` : ''}${escapeHtml(p.name)}</div>
 <div class="piece-meta">
 <span>×${p.qty}</span>
-${type==='extra' ? `<span>Solicita: ${escapeHtml(p.solicitante||'-')}</span>` : ''}
+${type==='extra' ? `<span>${escapeHtml((MOTIVOS.find(m=>m.id===(p.motivo||'retrabajo'))||{}).label||'')}</span><span>Solicita: ${escapeHtml(p.solicitante||'-')}</span>` : ''}
 <span class="status-chip ${isFinished?'pausado':p.status}" ${p.status!=='pendiente' ? 'id="chip_'+p.id+'"' : ''}><span class="dot"></span>${statusLabel}</span>
 ${isFinished ? `<span>${formatDate(p.finishedAt)}</span>` : ''}
 ${(p.comments && p.comments.length) ? `<span>💬 ${p.comments.length}</span>` : ''}
@@ -1133,6 +1212,7 @@ function openExtraModal(){
 editingExtraId = null;
 document.getElementById('extraModalTitle').textContent = 'Nuevo trabajo extra';
 document.getElementById('submitExtraBtn').textContent = 'Agregar trabajo extra';
+extraMotivo = null;
 extraCategory = null;
 extraProcess = null;
 extraSolicitante = null;
@@ -1140,6 +1220,7 @@ addingProcessInline = false;
 addingSolicitanteInline = false;
 document.getElementById('ex-qty').value = '1';
 document.getElementById('extraProcessField').style.display = 'none';
+renderExtraMotivoPicker();
 renderExtraCategoryPicker();
 renderExtraProcessPicker();
 renderExtraSolicitantePicker();
@@ -1154,6 +1235,7 @@ if(!p) return;
 editingExtraId = id;
 document.getElementById('extraModalTitle').textContent = 'Editar trabajo extra';
 document.getElementById('submitExtraBtn').textContent = 'Guardar cambios';
+extraMotivo = p.motivo || 'retrabajo';
 extraCategory = p.category;
 extraProcess = p.process || null;
 extraSolicitante = p.solicitante || null;
@@ -1161,12 +1243,14 @@ addingProcessInline = false;
 addingSolicitanteInline = false;
 document.getElementById('ex-qty').value = p.qty;
 document.getElementById('extraProcessField').style.display = (extraCategory==='produccion') ? 'block' : 'none';
+renderExtraMotivoPicker();
 renderExtraCategoryPicker();
 renderExtraProcessPicker();
 renderExtraSolicitantePicker();
 document.getElementById('extraOverlay').classList.add('open');
 }
 async function submitExtra(){
+if(!extraMotivo){ showToast('Elegí el motivo: retrabajo o solicitada.', true); return; }
 if(!extraCategory){ showToast('Elegí el tipo de trabajo.', true); return; }
 if(extraCategory==='produccion' && !extraProcess){ showToast('Elegí el proceso.', true); return; }
 const qty = document.getElementById('ex-qty').value.trim();
@@ -1175,6 +1259,7 @@ if(!extraSolicitante){ showToast('Elegí quién lo solicita.', true); return; }
 if(editingExtraId){
 const p = pieces.find(x=>x.id===editingExtraId);
 if(!p) return;
+p.motivo = extraMotivo;
 p.category = extraCategory;
 p.process = extraCategory==='produccion' ? extraProcess : null;
 p.qty = Number(qty);
@@ -1190,7 +1275,7 @@ const activeExtras = getActiveSorted('extra');
 const maxOrder = activeExtras.length ? Math.max(...activeExtras.map(x=>x.order||0)) : -1;
 const id = uid('ex');
 const piece = {
-id, type:'extra', category: extraCategory, process: extraCategory==='produccion' ? extraProcess : null,
+id, type:'extra', motivo: extraMotivo, category: extraCategory, process: extraCategory==='produccion' ? extraProcess : null,
 qty:Number(qty), solicitante: extraSolicitante, order:maxOrder+1, color:null,
 hasIcon:false, hasPdf:false, pdfName:null,
 status:'pendiente', startedAt:null, accumulatedMs:0, finishedAt:null, totalMs:null,
@@ -1212,6 +1297,7 @@ openExtraModal, closeExtraModal, startEditExtra, submitExtra
 loadPieces();
 loadExtraCatalog();
 renderStatsRangePicker();
+renderStatsViewPicker();
 </script>
 </body>
 </html>
