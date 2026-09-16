@@ -95,6 +95,22 @@ table tr:hover td{background:#fbf9f3;}
 .toolbar select{padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;}
 .plan-input{width:100%;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;font-family:inherit;}
 .plan-input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+.plan-row-highlight{background:var(--accent-light) !important;}
+.plan-dia-LUNES{background:#e3edf7;} .plan-dia-MARTES{background:#e5f2e6;} .plan-dia-MIÉRCOLES{background:#f4eef9;} .plan-dia-JUEVES{background:#fdf0dc;} .plan-dia-VIERNES{background:#fbe7ea;}
+select.plan-input.plan-dia-LUNES,input.plan-input.plan-dia-LUNES{background:#e3edf7;}
+select.plan-input.plan-dia-MARTES,input.plan-input.plan-dia-MARTES{background:#e5f2e6;}
+select.plan-input.plan-dia-MIÉRCOLES,input.plan-input.plan-dia-MIÉRCOLES{background:#f4eef9;}
+select.plan-input.plan-dia-JUEVES,input.plan-input.plan-dia-JUEVES{background:#fdf0dc;}
+select.plan-input.plan-dia-VIERNES,input.plan-input.plan-dia-VIERNES{background:#fbe7ea;}
+.plan-preview-table{width:100%;border-collapse:collapse;table-layout:fixed;}
+.plan-preview-table th{padding:7px 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink);text-align:center;border:1px solid var(--border);}
+.plan-preview-table td{border:1px solid var(--border);vertical-align:top;padding:0;}
+.plan-preview-bloque-cab{background:var(--accent);color:#fff;font-weight:700;font-size:12px;padding:6px 10px;}
+.plan-preview-job{padding:7px 8px;font-size:11.5px;cursor:pointer;line-height:1.35;min-height:52px;white-space:pre-wrap;}
+.plan-preview-job:hover{outline:2px solid var(--accent);outline-offset:-2px;}
+.plan-preview-lote{padding:5px 8px;font-size:10.5px;font-weight:700;text-decoration:underline;color:var(--accent-dark);background:#fcecc9;text-align:center;}
+.plan-preview-empty{padding:7px 8px;font-size:16px;color:#c8bfa5;cursor:pointer;text-align:center;min-height:40px;border:1px dashed #d9cfaf;}
+.plan-preview-empty:hover{background:var(--accent-light);color:var(--accent-dark);}
 .pill{display:inline-block;background:var(--accent-light);color:var(--accent-dark);border-radius:12px;padding:3px 10px;font-size:11px;margin:2px;font-weight:600;}
 .export-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
 .muted{color:var(--muted);font-size:12px;}
@@ -197,11 +213,12 @@ table tr:hover td{background:#fbf9f3;}
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
       <h2 style="border:none;margin:0;">Trabajos</h2>
       <div class="export-row" style="margin:0;">
-        <button class="btn secondary small" id="btnPlanImportarPendientes">Importar pendientes actuales</button>
+        <button class="btn secondary small" id="btnPlanImportarPendientes">Elegir de los pendientes actuales</button>
         <button class="btn secondary small" id="btnPlanAgregarFila">+ Agregar trabajo</button>
         <button class="btn secondary small" id="btnPlanVaciar" style="border-color:var(--bad);color:var(--bad);">Vaciar todo</button>
       </div>
     </div>
+    <div id="planPendientesPicker" style="display:none;margin-bottom:12px;"></div>
     <p class="muted" id="planHint"></p>
     <div class="table-wrap" style="max-height:520px;">
       <table id="tblPlanificador">
@@ -213,6 +230,13 @@ table tr:hover td{background:#fbf9f3;}
       <button class="btn" id="btnPlanGenerar">Generar y descargar Excel de la semana</button>
     </div>
   </div>
+
+  <div class="panel">
+    <h2>Vista previa de la semana</h2>
+    <p class="muted">Así va quedando el Excel. Tocá un trabajo ya cargado para editarlo arriba, o un casillero vacío para agregar un trabajo ahí mismo.</p>
+    <div id="planPreview"></div>
+  </div>
+
   <datalist id="dlPlanPuestos"></datalist>
   <datalist id="dlPlanOperarios"></datalist>
   <datalist id="dlPlanTurnos"></datalist>
@@ -1893,6 +1917,15 @@ const PLAN_DRAFT_KEY = 'soldadura_planificador_draft_v1';
 const DIAS_PLAN = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES'];
 const DIA_COL_PLAN = { LUNES: 1, MARTES: 3, 'MIÉRCOLES': 5, JUEVES: 7, VIERNES: 9 };
 
+/** Compara textos sin importar mayúsculas/minúsculas ni espacios de más (" Martinez " = "MARTINEZ"). */
+function normPlan(s) { return String(s || '').trim().replace(/\s+/g, ' ').toUpperCase(); }
+/** Limpieza que se aplica al salir de cada campo: recorta espacios y, en los campos donde la
+ *  mayúscula importa para que el analizador lo relea bien (operario, turno, puesto, código), la fuerza. */
+function limpiarCampoPlan(campo, valor) {
+  const v = String(valor || '').trim().replace(/\s+/g, ' ');
+  return ['operario', 'turno', 'puesto', 'codigo'].includes(campo) ? v.toUpperCase() : v;
+}
+
 function nuevaFilaPlan(datos) {
   return { puesto: '', turno: '', operario: '', dia: '', lote: '', codigo: '', descripcion: '', cantidad: '', wo: '', ...datos };
 }
@@ -1916,23 +1949,30 @@ function guardarBorradorPlan() {
   } catch (e) {}
 }
 
-function renderPlanificadorView() {
-  if (!App.planificador.filas.length) cargarBorradorPlan();
-
-  // sugerencias tomadas de lo que ya se vio en el histórico (puestos, operarios y turnos reales)
-  const puestos = new Set(), operarios = new Set(), turnos = new Set();
+function actualizarDatalistsPlan() {
+  const puestos = new Set(), operarios = new Set(), turnos = new Set(), lotes = new Set();
+  // sugerencias del histórico + lo que ya se escribió en esta misma planificación (para que ande desde la primera semana)
   Store.allRecords().forEach(r => {
     if (r.puesto) puestos.add(r.puesto);
     if (r.turno) turnos.add(r.turno);
     separarOperarios(r.operario).forEach(o => operarios.add(o));
   });
+  App.planificador.filas.forEach(f => {
+    if (f.puesto) puestos.add(f.puesto);
+    if (f.turno) turnos.add(f.turno);
+    if (f.operario) separarOperarios(f.operario).forEach(o => operarios.add(o));
+    if (f.lote) lotes.add(f.lote);
+  });
   document.getElementById('dlPlanPuestos').innerHTML = [...puestos].sort().map(p => `<option value="${escapeHtml(p)}">`).join('');
   document.getElementById('dlPlanOperarios').innerHTML = [...operarios].sort().map(o => `<option value="${escapeHtml(o)}">`).join('');
   document.getElementById('dlPlanTurnos').innerHTML = [...turnos].sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
-  const lotes = new Set(App.planificador.filas.map(f => f.lote).filter(Boolean));
   document.getElementById('dlPlanLotes').innerHTML = [...lotes].sort().map(l => `<option value="${escapeHtml(l)}">`).join('');
+}
 
+function renderPlanificadorView() {
+  if (!App.planificador.filas.length) cargarBorradorPlan();
   if (!App.planificador.filas.length) App.planificador.filas.push(nuevaFilaPlan());
+  actualizarDatalistsPlan();
   drawPlanificadorTable();
 }
 
@@ -1942,25 +1982,42 @@ function drawPlanificadorTable() {
     const val = escapeHtml(String(App.planificador.filas[idx][campo] || ''));
     return `<input class="plan-input" data-idx="${idx}" data-campo="${campo}" value="${val}" placeholder="${placeholder || ''}"${list ? ` list="${list}"` : ''}>`;
   };
-  tbody.innerHTML = App.planificador.filas.map((f, idx) => `<tr>
+  tbody.innerHTML = App.planificador.filas.map((f, idx) => {
+    const diaClase = f.dia ? ` plan-dia-${f.dia}` : '';
+    return `<tr data-plan-fila="${idx}">
     <td>${inp(idx, 'puesto', 'S-01 / (WMX)', 'dlPlanPuestos')}</td>
     <td>${inp(idx, 'turno', 'MAÑANA', 'dlPlanTurnos')}</td>
     <td>${inp(idx, 'operario', 'FERREYRA/BUSON', 'dlPlanOperarios')}</td>
-    <td><select class="plan-input" data-idx="${idx}" data-campo="dia"><option value="">-</option>${DIAS_PLAN.map(d => `<option value="${d}" ${f.dia === d ? 'selected' : ''}>${d.charAt(0) + d.slice(1).toLowerCase()}</option>`).join('')}</select></td>
+    <td><select class="plan-input${diaClase}" data-idx="${idx}" data-campo="dia"><option value="">-</option>${DIAS_PLAN.map(d => `<option value="${d}" ${f.dia === d ? 'selected' : ''}>${d.charAt(0) + d.slice(1).toLowerCase()}</option>`).join('')}</select></td>
     <td>${inp(idx, 'lote', 'ej: ATF U448 x14 (AGO)', 'dlPlanLotes')}</td>
     <td>${inp(idx, 'codigo', 'H0001849')}</td>
     <td>${inp(idx, 'descripcion', 'opcional')}</td>
     <td><input class="plan-input" type="number" min="0" data-idx="${idx}" data-campo="cantidad" value="${escapeHtml(String(f.cantidad || ''))}"></td>
     <td>${inp(idx, 'wo', '128716')}</td>
     <td><button class="link-btn" data-plan-quitar="${idx}" style="color:var(--bad);">Quitar</button></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 
   tbody.querySelectorAll('.plan-input').forEach(el => {
     const ev = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(ev, () => {
       App.planificador.filas[parseInt(el.dataset.idx)][el.dataset.campo] = el.value;
+      if (el.dataset.campo === 'dia') { guardarBorradorPlan(); drawPlanificadorTable(); renderPlanPreview(); return; }
       guardarBorradorPlan();
       actualizarPlanHint();
+      renderPlanPreview();
+    });
+    // al salir del campo, se limpia (espacios de más y mayúsculas donde corresponde)
+    if (el.tagName === 'INPUT') el.addEventListener('blur', () => {
+      const idx = parseInt(el.dataset.idx), campo = el.dataset.campo;
+      const limpio = limpiarCampoPlan(campo, App.planificador.filas[idx][campo]);
+      if (limpio !== App.planificador.filas[idx][campo]) {
+        App.planificador.filas[idx][campo] = limpio;
+        el.value = limpio;
+        guardarBorradorPlan();
+        actualizarDatalistsPlan();
+        renderPlanPreview();
+      }
     });
   });
   tbody.querySelectorAll('[data-plan-quitar]').forEach(b => b.onclick = () => {
@@ -1968,8 +2025,10 @@ function drawPlanificadorTable() {
     if (!App.planificador.filas.length) App.planificador.filas.push(nuevaFilaPlan());
     guardarBorradorPlan();
     drawPlanificadorTable();
+    renderPlanPreview();
   });
   actualizarPlanHint();
+  renderPlanPreview();
 }
 
 function filasPlanValidas() {
@@ -1983,12 +2042,23 @@ function actualizarPlanHint() {
     : `${total} fila(s) cargada(s) — ${ok} lista(s) para exportar (hacen falta puesto, día y código).`;
 }
 
+/** Lleva el cursor y el resaltado a una fila de la tabla de carga (usado desde la vista previa). */
+function irAFilaPlan(idx) {
+  drawPlanificadorTable();
+  const fila = document.querySelector(`#tblPlanificadorBody tr[data-plan-fila="${idx}"]`);
+  if (!fila) return;
+  fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  fila.classList.add('plan-row-highlight');
+  const codigoInput = fila.querySelector('[data-campo="codigo"]');
+  if (codigoInput) codigoInput.focus();
+  setTimeout(() => fila.classList.remove('plan-row-highlight'), 2000);
+}
+
 document.getElementById('btnPlanAgregarFila').addEventListener('click', () => {
-  const ultima = App.planificador.filas[App.planificador.filas.length - 1];
-  // arranca la fila nueva con el mismo puesto/turno/operario que la anterior: al planificar se cargan varios trabajos seguidos del mismo puesto
-  App.planificador.filas.push(nuevaFilaPlan(ultima ? { puesto: ultima.puesto, turno: ultima.turno, operario: ultima.operario, dia: ultima.dia, lote: ultima.lote } : {}));
+  App.planificador.filas.push(nuevaFilaPlan());
   guardarBorradorPlan();
   drawPlanificadorTable();
+  irAFilaPlan(App.planificador.filas.length - 1);
 });
 
 document.getElementById('btnPlanVaciar').addEventListener('click', () => {
@@ -2000,24 +2070,121 @@ document.getElementById('btnPlanVaciar').addEventListener('click', () => {
   drawPlanificadorTable();
 });
 
-document.getElementById('btnPlanImportarPendientes').addEventListener('click', () => {
-  const map = Calc.estadoActualPorWO(Store.allRecords());
-  const pendientes = [...map.values()].map(e => e.ultimo).filter(r => (r.cantidad_pendiente || 0) > 0);
-  if (!pendientes.length) { alert('No hay pendientes actuales en el histórico para importar.'); return; }
-  const nuevas = pendientes.map(r => nuevaFilaPlan({
-    puesto: r.puesto, turno: r.turno || '', operario: r.operario,
-    codigo: r.codigo, descripcion: r.descripcion === '(sin descripción)' ? '' : r.descripcion,
-    cantidad: r.cantidad_pendiente, wo: r.wo
-  }));
-  const todasVacias = App.planificador.filas.every(f => !f.puesto && !f.codigo);
-  App.planificador.filas = todasVacias ? nuevas : App.planificador.filas.concat(nuevas);
+/** Agrega una fila nueva ya precompletada (usada por el picker de pendientes y por los casilleros
+ *  vacíos de la vista previa) y lleva el foco ahí para terminar de completarla. */
+function agregarFilaPlanCon(datos) {
+  const vacias = App.planificador.filas.filter(f => !f.puesto && !f.codigo);
+  let idx;
+  if (vacias.length === App.planificador.filas.length) {
+    // si todo lo cargado hasta ahora son filas vacías sin usar, reutiliza la última en vez de acumular
+    idx = App.planificador.filas.length - 1;
+    App.planificador.filas[idx] = nuevaFilaPlan(datos);
+  } else {
+    App.planificador.filas.push(nuevaFilaPlan(datos));
+    idx = App.planificador.filas.length - 1;
+  }
   guardarBorradorPlan();
-  drawPlanificadorTable();
-  alert(`Se importaron ${nuevas.length} pendiente(s). Asignales el día de la semana que corresponda antes de exportar.`);
+  actualizarDatalistsPlan();
+  irAFilaPlan(idx);
+}
+
+/* ---- Elegir de los pendientes actuales (uno por uno, con click) ---- */
+document.getElementById('btnPlanImportarPendientes').addEventListener('click', () => {
+  const box = document.getElementById('planPendientesPicker');
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  const map = Calc.estadoActualPorWO(Store.allRecords());
+  const pendientes = [...map.values()].map(e => e.ultimo).filter(r => (r.cantidad_pendiente || 0) > 0)
+    .sort((a, b) => b.cantidad_pendiente - a.cantidad_pendiente);
+  if (!pendientes.length) { alert('No hay pendientes actuales en el histórico.'); return; }
+  box.style.display = 'block';
+  box.innerHTML = `<div class="table-wrap" style="max-height:260px;"><table>
+    <thead><tr><th>Código</th><th>Descripción</th><th>WO</th><th>Puesto</th><th>Operario</th><th>Pendiente</th><th></th></tr></thead>
+    <tbody>${pendientes.map((r, i) => `<tr>
+      <td>${r.codigo}</td><td>${escapeHtml(r.descripcion)}</td><td>${r.wo || ''}</td><td>${escapeHtml(r.puesto)}</td><td>${escapeHtml(r.operario)}</td><td>${r.cantidad_pendiente}</td>
+      <td><button class="btn secondary small" data-plan-pend="${i}">+ Agregar</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+  box.querySelectorAll('[data-plan-pend]').forEach(b => b.onclick = () => {
+    const r = pendientes[parseInt(b.dataset.planPend)];
+    agregarFilaPlanCon({
+      puesto: r.puesto, turno: r.turno || '', operario: r.operario, codigo: r.codigo,
+      descripcion: r.descripcion === '(sin descripción)' ? '' : r.descripcion,
+      cantidad: r.cantidad_pendiente, wo: r.wo
+    });
+  });
 });
 
 /** Acepta "128716", "128716|129655" o "128716, 129655" y devuelve los números sueltos. */
 function separarWOsTexto(txt) { return String(txt || '').split(/[|,;/]/).map(s => s.replace(/\D/g, '')).filter(Boolean); }
+
+/** Agrupa las filas válidas en bloques por puesto+turno+operario (comparando sin mayúsculas/espacios
+ *  de más) y, dentro de cada día, en líneas de lote+trabajos — la misma estructura que se usa tanto
+ *  para la vista previa como para el Excel final, así las dos siempre coinciden. */
+function agruparPlanPorBloques(filas) {
+  const bloques = [];
+  const indice = new Map();
+  filas.forEach((f, idxOriginal) => {
+    const key = normPlan(f.puesto) + '|' + normPlan(f.turno) + '|' + normPlan(f.operario);
+    if (!indice.has(key)) {
+      indice.set(key, bloques.length);
+      const porDia = {};
+      DIAS_PLAN.forEach(d => porDia[d] = { lineas: [], ultimoLote: null });
+      bloques.push({ puesto: f.puesto, turno: f.turno, operario: f.operario, porDia });
+    }
+    const dia = (f.dia || '').toUpperCase();
+    const pd = bloques[indice.get(key)].porDia[dia];
+    if (!pd) return;
+    const lote = (f.lote || '').trim();
+    if (lote && lote !== pd.ultimoLote) pd.lineas.push({ tipo: 'lote', texto: lote });
+    pd.ultimoLote = lote || null;
+    pd.lineas.push({ tipo: 'job', job: f, idxOriginal });
+  });
+  return bloques;
+}
+
+/* ---- Vista previa interactiva ---- */
+function renderPlanPreview() {
+  const cont = document.getElementById('planPreview');
+  const validas = App.planificador.filas.filter(f => f.puesto && f.dia);
+  if (!validas.length) {
+    cont.innerHTML = '<div class="emptybox">Todavía no hay nada cargado — a medida que completes puesto, día y código acá va a aparecer la semana armada.</div>';
+    return;
+  }
+  const bloques = agruparPlanPorBloques(App.planificador.filas.filter(f => f.puesto && f.dia));
+
+  let html = `<table class="plan-preview-table"><thead><tr><th style="width:60px;"></th>${DIAS_PLAN.map(d => `<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+  bloques.forEach((b, bi) => {
+    html += `<tr><td colspan="6" class="plan-preview-bloque-cab">TURNO: ${escapeHtml(b.turno || '(sin especificar)')} &nbsp;·&nbsp; OPERARIOS: ${escapeHtml(b.operario || '(sin especificar)')} &nbsp;·&nbsp; PUESTO: ${escapeHtml(b.puesto)}</td></tr>`;
+    const maxLen = Math.max(0, ...DIAS_PLAN.map(d => b.porDia[d].lineas.length));
+    const filas = Math.max(maxLen, 1);
+    for (let i = 0; i < filas; i++) {
+      html += `<tr>${i === 0 ? `<td rowspan="${filas}" class="muted" style="text-align:center;font-size:10px;">bloque ${bi + 1}</td>` : ''}`;
+      for (const d of DIAS_PLAN) {
+        const linea = b.porDia[d].lineas[i];
+        const diaClase = `plan-dia-${d}`;
+        if (linea && linea.tipo === 'lote') {
+          html += `<td class="${diaClase}"><div class="plan-preview-lote">${escapeHtml(linea.texto)}</div></td>`;
+        } else if (linea && linea.tipo === 'job') {
+          const j = linea.job;
+          const texto = (j.descripcion ? escapeHtml(j.descripcion) + '\n' : '') + `${escapeHtml(j.codigo)} x${j.cantidad || 1}` + (j.wo ? `\n(${separarWOsTexto(j.wo).map(w => 'WO-' + w).join('|')})` : '');
+          html += `<td class="${diaClase}"><div class="plan-preview-job" data-plan-goto="${linea.idxOriginal}" title="Tocar para editar">${texto}</div></td>`;
+        } else if (i === b.porDia[d].lineas.length) {
+          // primer casillero libre de este día en este bloque: click agrega un trabajo nuevo ya precompletado
+          html += `<td class="${diaClase}"><div class="plan-preview-empty" data-plan-add-puesto="${escapeHtml(b.puesto)}" data-plan-add-turno="${escapeHtml(b.turno)}" data-plan-add-operario="${escapeHtml(b.operario)}" data-plan-add-dia="${d}" title="Agregar un trabajo acá">+</div></td>`;
+        } else {
+          html += `<td class="${diaClase}"></td>`;
+        }
+      }
+      html += `</tr>`;
+    }
+  });
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+
+  cont.querySelectorAll('[data-plan-goto]').forEach(el => el.onclick = () => irAFilaPlan(parseInt(el.dataset.planGoto)));
+  cont.querySelectorAll('[data-plan-add-dia]').forEach(el => el.onclick = () => {
+    agregarFilaPlanCon({ puesto: el.dataset.planAddPuesto, turno: el.dataset.planAddTurno, operario: el.dataset.planAddOperario, dia: el.dataset.planAddDia });
+  });
+}
 
 document.getElementById('btnPlanGenerar').addEventListener('click', async () => {
   const { excelOk } = await window.__libsReady;
@@ -2030,27 +2197,7 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
   const validas = filasPlanValidas();
   if (!validas.length) { alert('Agregá al menos un trabajo con puesto, día y código completos.'); return; }
 
-  // Agrupar en bloques por puesto+turno+operario, respetando el orden de carga. Dentro de cada
-  // bloque, cada día es una lista de "líneas": cuando cambia el lote/kit, se inserta un título
-  // antes del grupo de trabajos de ese lote (igual que en la planilla real).
-  const bloques = [];
-  const indice = new Map();
-  for (const f of validas) {
-    const key = f.puesto + '|' + f.turno + '|' + f.operario;
-    if (!indice.has(key)) {
-      indice.set(key, bloques.length);
-      const porDia = {};
-      DIAS_PLAN.forEach(d => porDia[d] = { lineas: [], ultimoLote: null });
-      bloques.push({ puesto: f.puesto, turno: f.turno, operario: f.operario, porDia });
-    }
-    const dia = f.dia.toUpperCase();
-    const pd = bloques[indice.get(key)].porDia[dia];
-    if (!pd) continue;
-    const lote = (f.lote || '').trim();
-    if (lote && lote !== pd.ultimoLote) pd.lineas.push({ tipo: 'lote', texto: lote });
-    pd.ultimoLote = lote || null;
-    pd.lineas.push({ tipo: 'job', job: f });
-  }
+  const bloques = agruparPlanPorBloques(validas);
 
   // --- estilos reutilizables ---
   const AZUL = 'FF1B4965', GRIS_CAB = 'FFE7EEF2', BORDE = 'FFB0BEC5';
@@ -2104,7 +2251,6 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
   let row = 4;
   for (const b of bloques) {
     // Fila de encabezado del puesto: turno | operarios | puesto, cada uno combinado para que se lea completo
-    const filaCab = ws.getRow(row);
     ws.mergeCells(row, 1, row, 2);
     ws.mergeCells(row, 3, row, 5);
     ws.mergeCells(row, 6, row, 10);
@@ -2121,19 +2267,17 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
       c.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
     });
     for (let col = 1; col <= 10; col++) ws.getCell(row, col).border = borde;
-    filaCab.height = 22;
+    ws.getRow(row).height = 22;
 
     // Fila libre para notas/insumos (el analizador la ignora siempre, por eso los trabajos empiezan 2 filas abajo)
-    const filaNotas = ws.getRow(row + 1);
     for (let col = 1; col <= 10; col++) {
       const c = ws.getCell(row + 1, col);
       c.fill = relleno('FFF7F5EF');
       c.border = borde;
-      c.alignment = { wrapText: true, vertical: 'top' };
     }
     ws.getCell(row + 1, 1).value = '(notas / insumos)';
     ws.getCell(row + 1, 1).font = { italic: true, size: 9, color: { argb: 'FF9AA5AD' } };
-    filaNotas.height = 18;
+    ws.getRow(row + 1).height = 18;
     row += 2;
 
     const maxLen = Math.max(0, ...DIAS_PLAN.map(d => b.porDia[d].lineas.length));
@@ -2167,6 +2311,7 @@ document.getElementById('btnPlanGenerar').addEventListener('click', async () => 
   const buffer = await wb.xlsx.writeBuffer();
   downloadBlob(new Blob([buffer], { type: 'application/octet-stream' }), `Plan_${semana}_${anio}.xlsx`);
 });
+
 
 /* ---------------------- UI: Configuración ---------------------- */
 function renderConfigView() {
