@@ -49,6 +49,18 @@ header.app .brand{display:flex;align-items:center;gap:12px;}
 header.app .brand img{width:40px;height:40px;border-radius:9px;display:block;}
 header.app h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.1px;color:var(--ink);}
 header.app .sub{font-size:12px;color:var(--muted);}
+.header-search{position:relative;flex:1;max-width:420px;min-width:200px;}
+.header-search input{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;}
+.header-search input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+.search-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 6px 18px rgba(33,29,23,.12);max-height:380px;overflow:auto;z-index:500;}
+.search-dropdown.open{display:block;}
+.search-dropdown .sd-item{padding:9px 12px;font-size:12.5px;cursor:pointer;border-bottom:1px solid #f1ece0;}
+.search-dropdown .sd-item:hover{background:var(--accent-light);}
+.search-dropdown .sd-item b{color:var(--ink);}
+.search-dropdown .sd-more{padding:9px 12px;font-size:12px;color:var(--accent-dark);font-weight:700;cursor:pointer;text-align:center;}
+.search-dropdown .sd-empty{padding:12px;font-size:12.5px;color:var(--muted);text-align:center;}
+.gear-btn{background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:15px;cursor:pointer;flex-shrink:0;}
+.gear-btn:hover{background:var(--accent-light);border-color:var(--accent);}
 nav.tabs{display:flex;background:var(--panel);flex-wrap:wrap;border-bottom:1px solid var(--border);padding:0 24px;}
 nav.tabs button{background:none;border:none;color:var(--muted);padding:13px 16px;font-size:13px;cursor:pointer;border-bottom:3px solid transparent;font-weight:600;}
 nav.tabs button:hover{color:var(--ink);}
@@ -143,20 +155,24 @@ select.plan-input.plan-dia-VIERNES,input.plan-input.plan-dia-VIERNES{background:
       <div class="sub" id="hdrSub">Sin datos cargados</div>
     </div>
   </div>
+  <div class="header-search">
+    <input type="text" id="globalSearchInput" placeholder="Buscar código, WO, operario, puesto...">
+    <div id="globalSearchResults" class="search-dropdown"></div>
+  </div>
+  <button class="gear-btn" id="btnConfigGear" title="Configuración">⚙️</button>
 </header>
 <div id="libsBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
 <div id="storageBanner" class="warnbox" style="display:none;margin:12px 22px 0;"></div>
 
 <nav class="tabs" id="tabs">
   <button data-view="cargar" class="active">Cargar Excel</button>
+  <button data-view="estadoactual">Estado actual</button>
   <button data-view="planificador">Planificador</button>
   <button data-view="dashboard">Dashboard semanal</button>
   <button data-view="pendientes">Pendientes</button>
   <button data-view="cruce">Cruce NetSuite</button>
   <button data-view="operarios">Operarios</button>
   <button data-view="historico">Histórico</button>
-  <button data-view="busqueda">Búsqueda</button>
-  <button data-view="config">Configuración</button>
 </nav>
 
 <main>
@@ -195,6 +211,26 @@ select.plan-input.plan-dia-VIERNES,input.plan-input.plan-dia-VIERNES{background:
     <p class="muted">El archivo tiene hojas de histórico con muchas semanas acumuladas. No se escanean automáticamente porque puede tardar. Si querés importar semanas pasadas al histórico de la app, hacelo acá (puede tardar algunos segundos por hoja).</p>
     <div class="export-row"><button class="btn secondary" id="btnImportHistoricas">Escanear e importar hojas de HISTÓRICO</button></div>
     <div id="histImportStatus" class="status-line"></div>
+  </div>
+</section>
+
+<!-- ============ VISTA: ESTADO ACTUAL (NetSuite) ============ -->
+<section class="view" id="view-estadoactual">
+  <div class="panel">
+    <h2>Estado actual de NetSuite</h2>
+    <p class="muted">Este es el Excel que bajás cada semana de NetSuite con todo lo que está pendiente de declarar. Se guarda acá como referencia y se reemplaza solo cuando subís uno nuevo — lo usan tanto el <b>Cruce NetSuite</b> como el <b>Planificador</b> (para autocompletar código, descripción y cantidad a partir del WO).</p>
+    <div class="dropzone" id="dzEstadoActual">
+      <p class="big" id="dzEstadoActualLabel">ARRASTRAR EXCEL DE NETSUITE AQUÍ</p>
+      <p>o</p>
+      <button class="btn secondary" id="btnSelectEstadoActual">SELECCIONAR ARCHIVO</button>
+      <input type="file" id="fileEstadoActual" accept=".xlsx,.xlsm" style="display:none;">
+    </div>
+    <div class="status-line" id="statusEstadoActual"></div>
+  </div>
+  <div class="panel" id="panelEstadoActualInfo" style="display:none;">
+    <h2>Cargado actualmente</h2>
+    <div class="kpi-grid" id="estadoActualKpis"></div>
+    <div class="export-row"><button class="btn secondary small" id="btnQuitarEstadoActual" style="border-color:var(--bad);color:var(--bad);">Quitar</button></div>
   </div>
 </section>
 
@@ -311,30 +347,20 @@ select.plan-input.plan-dia-VIERNES,input.plan-input.plan-dia-VIERNES{background:
 <section class="view" id="view-cruce">
   <div class="panel">
     <h2>Cruzar Excel semanal contra NetSuite</h2>
-    <p class="muted">Cargá el Excel semanal (el pintado, tal como lo usa el planificador) y el Excel crudo exportado de NetSuite de esa misma semana. La app cruza código + WO + puesto y arma un listado de diferencias — en particular, qué se pintó como hecho en la planilla pero todavía no se declaró en NetSuite.</p>
-    <div class="charts-grid">
-      <div>
-        <h3>1. Excel semanal (pintado)</h3>
-        <div class="dropzone" id="dzExcelSemanal" style="padding:26px 14px;">
-          <p style="font-weight:700;color:var(--ink);" id="dzExcelSemanalLabel">Arrastrar o seleccionar</p>
-          <button class="btn secondary small" id="btnSelectExcelSemanal">Seleccionar archivo</button>
-          <input type="file" id="fileExcelSemanal" accept=".xlsx,.xlsm" style="display:none;">
-        </div>
-        <div class="status-line" id="statusExcelSemanal"></div>
+    <p class="muted">Cruza el Excel semanal (el pintado) contra el "Estado actual" de NetSuite ya cargado. La app compara código + WO + puesto y arma un listado de diferencias — en particular, qué se pintó como hecho en la planilla pero todavía no se declaró en NetSuite.</p>
+    <div id="cruceEstadoActualInfo" class="status-line"></div>
+    <div style="max-width:420px;margin-top:10px;">
+      <h3>Excel semanal (pintado)</h3>
+      <div class="dropzone" id="dzExcelSemanal" style="padding:26px 14px;">
+        <p style="font-weight:700;color:var(--ink);" id="dzExcelSemanalLabel">Arrastrar o seleccionar</p>
+        <button class="btn secondary small" id="btnSelectExcelSemanal">Seleccionar archivo</button>
+        <input type="file" id="fileExcelSemanal" accept=".xlsx,.xlsm" style="display:none;">
       </div>
-      <div>
-        <h3>2. Excel NetSuite (crudo)</h3>
-        <div class="dropzone" id="dzExcelNetsuite" style="padding:26px 14px;">
-          <p style="font-weight:700;color:var(--ink);" id="dzExcelNetsuiteLabel">Arrastrar o seleccionar</p>
-          <button class="btn secondary small" id="btnSelectExcelNetsuite">Seleccionar archivo</button>
-          <input type="file" id="fileExcelNetsuite" accept=".xlsx,.xlsm" style="display:none;">
-        </div>
-        <div class="status-line" id="statusExcelNetsuite"></div>
-      </div>
+      <div class="status-line" id="statusExcelSemanal"></div>
     </div>
     <div class="export-row">
-      <button class="btn" id="btnCruzar" disabled>Cargar / Cruzar</button>
-      <span class="muted" id="cruceHint">Cargá los dos archivos para habilitar el cruce.</span>
+      <button class="btn" id="btnCruzar" disabled>Cruzar</button>
+      <span class="muted" id="cruceHint">Cargá el Excel semanal para habilitar el cruce.</span>
     </div>
   </div>
 
@@ -1016,8 +1042,9 @@ const Store = {
       if (!data.manualEntries) data.manualEntries = []; // faltantes marcados como terminados a mano (no vienen de un Excel)
       if (!data.cruces) data.cruces = []; // resultados guardados de cruces contra NetSuite
       if (!data.operarios) data.operarios = {}; // perfiles editables por operario
+      if (data.netsuiteEstadoActual === undefined) data.netsuiteEstadoActual = null; // último export de NetSuite cargado en "Estado actual" (se reemplaza cada semana)
       return data;
-    } catch (e) { return { semanas: [], manualEntries: [], cruces: [], operarios: {} }; }
+    } catch (e) { return { semanas: [], manualEntries: [], cruces: [], operarios: {}, netsuiteEstadoActual: null }; }
   },
   save(data) {
     const json = JSON.stringify(data);
@@ -1059,6 +1086,13 @@ const Store = {
   saveOperarioPerfil(nombre, perfil) {
     const data = this.load();
     data.operarios[nombre] = { ...(data.operarios[nombre] || {}), ...perfil, nombre };
+    this.save(data);
+  },
+  /** Guarda el último export de NetSuite (lista de pendientes) como "estado actual", reemplazando
+   *  el anterior. Lo usan tanto el Cruce NetSuite como el autocompletado del Planificador. */
+  guardarNetsuiteEstadoActual(rows, nombreArchivo) {
+    const data = this.load();
+    data.netsuiteEstadoActual = { rows, archivo: nombreArchivo, actualizado: new Date().toISOString() };
     this.save(data);
   },
   /** Registra que un pendiente se completó "fuera de planilla" (no se volvió a cargar en ningún Excel).
@@ -1139,6 +1173,8 @@ function showView(name) {
   if (name === 'config') renderConfigView();
   if (name === 'operarios') renderOperariosView();
   if (name === 'planificador') renderPlanificadorView();
+  if (name === 'estadoactual') renderEstadoActualView();
+  if (name === 'cruce') actualizarInfoEstadoActualEnCruce();
 }
 
 /* ---------------------- UI: carga de archivo ---------------------- */
@@ -1308,6 +1344,55 @@ function wireSimpleDropzone(dzId, inputId, btnId, onFile) {
   dz.addEventListener('drop', e => { if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
 }
 
+/* ---------------------- UI: Estado actual (NetSuite) ---------------------- */
+wireSimpleDropzone('dzEstadoActual', 'fileEstadoActual', 'btnSelectEstadoActual', async file => {
+  const statusEl = document.getElementById('statusEstadoActual');
+  statusEl.className = 'status-line';
+  statusEl.textContent = 'Leyendo...';
+  await nextPaint();
+  try {
+    const { excelOk } = await window.__libsReady;
+    if (!excelOk || typeof ExcelJS === 'undefined') throw new Error('No se pudo cargar la librería de lectura de Excel.');
+    const wb = await ExcelReader.loadWorkbook(file);
+    const rows = NetsuiteReader.parseWorkbook(wb);
+    Store.guardarNetsuiteEstadoActual(rows, file.name);
+    document.getElementById('dzEstadoActualLabel').textContent = file.name;
+    statusEl.textContent = `${rows.length} filas leídas y guardadas como estado actual.`;
+    statusEl.className = 'status-line ok';
+    renderEstadoActualView();
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Error: ' + err.message;
+  }
+});
+document.getElementById('btnQuitarEstadoActual').addEventListener('click', () => {
+  if (!confirm('¿Quitar el estado actual de NetSuite guardado?')) return;
+  const data = Store.load();
+  data.netsuiteEstadoActual = null;
+  Store.save(data);
+  renderEstadoActualView();
+});
+function renderEstadoActualView() {
+  const data = Store.load();
+  const info = document.getElementById('panelEstadoActualInfo');
+  const label = document.getElementById('dzEstadoActualLabel');
+  if (data.netsuiteEstadoActual) {
+    info.style.display = 'block';
+    label.textContent = 'ARRASTRAR EXCEL DE NETSUITE AQUÍ (reemplaza el actual)';
+    const filasConCodigo = new Set(data.netsuiteEstadoActual.rows.map(r => r.codigo)).size;
+    document.getElementById('estadoActualKpis').innerHTML = kpiGridHtml([
+      ['Archivo', data.netsuiteEstadoActual.archivo, ''],
+      ['Filas', data.netsuiteEstadoActual.rows.length, ''],
+      ['Códigos distintos', filasConCodigo, ''],
+      ['Actualizado', new Date(data.netsuiteEstadoActual.actualizado).toLocaleString('es-AR'), '']
+    ]);
+  } else {
+    info.style.display = 'none';
+    label.textContent = 'ARRASTRAR EXCEL DE NETSUITE AQUÍ';
+  }
+}
+
+
 wireSimpleDropzone('dzExcelSemanal', 'fileExcelSemanal', 'btnSelectExcelSemanal', async file => {
   const statusEl = document.getElementById('statusExcelSemanal');
   statusEl.className = 'status-line';
@@ -1340,34 +1425,31 @@ wireSimpleDropzone('dzExcelSemanal', 'fileExcelSemanal', 'btnSelectExcelSemanal'
   }
 });
 
-wireSimpleDropzone('dzExcelNetsuite', 'fileExcelNetsuite', 'btnSelectExcelNetsuite', async file => {
-  const statusEl = document.getElementById('statusExcelNetsuite');
-  statusEl.className = 'status-line';
-  statusEl.textContent = 'Leyendo...';
-  await nextPaint();
-  try {
-    const { excelOk } = await window.__libsReady;
-    if (!excelOk) throw new Error('No se pudo cargar la librería de lectura de Excel.');
-    const wb = await ExcelReader.loadWorkbook(file);
-    const rows = NetsuiteReader.parseWorkbook(wb);
-    App.cruce.netsuiteRows = rows;
-    App.cruce.netsuiteFileName = file.name;
-    document.getElementById('dzExcelNetsuiteLabel').textContent = file.name;
-    statusEl.textContent = `${rows.length} filas leídas.`;
-    statusEl.className = 'status-line ok';
-    checkCruceReady();
-  } catch (err) {
-    console.error(err);
-    statusEl.textContent = 'Error: ' + err.message;
-  }
-});
-
 function checkCruceReady() {
   const listo = App.cruce.excelRecords && App.cruce.netsuiteRows;
   document.getElementById('btnCruzar').disabled = !listo;
-  document.getElementById('cruceHint').textContent = listo
-    ? 'Los dos archivos están listos. Tocá "Cargar / Cruzar" para comparar.'
-    : 'Cargá los dos archivos para habilitar el cruce.';
+  document.getElementById('cruceHint').textContent = !App.cruce.netsuiteRows
+    ? 'Primero cargá el Estado actual de NetSuite (pestaña "Estado actual").'
+    : listo ? 'Todo listo. Tocá "Cruzar" para comparar.' : 'Cargá el Excel semanal para habilitar el cruce.';
+}
+function actualizarInfoEstadoActualEnCruce() {
+  const data = Store.load();
+  const info = document.getElementById('cruceEstadoActualInfo');
+  if (data.netsuiteEstadoActual) {
+    App.cruce.netsuiteRows = data.netsuiteEstadoActual.rows;
+    App.cruce.netsuiteFileName = data.netsuiteEstadoActual.archivo;
+    info.className = 'status-line ok';
+    info.innerHTML = `Usando el estado actual: <b>${escapeHtml(data.netsuiteEstadoActual.archivo)}</b> (${data.netsuiteEstadoActual.rows.length} filas, cargado el ${new Date(data.netsuiteEstadoActual.actualizado).toLocaleDateString('es-AR')}) — <a href="#" id="linkIrEstadoActual">actualizarlo</a>`;
+    const link = document.getElementById('linkIrEstadoActual');
+    if (link) link.onclick = e => { e.preventDefault(); showView('estadoactual'); };
+  } else {
+    App.cruce.netsuiteRows = null;
+    info.className = 'status-line';
+    info.innerHTML = `Todavía no cargaste el Estado actual de NetSuite. <a href="#" id="linkIrEstadoActual">Cargarlo ahora</a>`;
+    const link = document.getElementById('linkIrEstadoActual');
+    if (link) link.onclick = e => { e.preventDefault(); showView('estadoactual'); };
+  }
+  checkCruceReady();
 }
 
 document.getElementById('btnCruzar').addEventListener('click', () => {
@@ -1826,6 +1908,42 @@ function doSearch() {
   box.innerHTML = html;
 }
 
+document.getElementById('btnConfigGear').addEventListener('click', () => showView('config'));
+
+/* ---------------------- UI: Buscador fijo del encabezado ---------------------- */
+const globalSearchInput = document.getElementById('globalSearchInput');
+const globalSearchResults = document.getElementById('globalSearchResults');
+globalSearchInput.addEventListener('input', () => renderGlobalSearchDropdown(globalSearchInput.value.trim()));
+globalSearchInput.addEventListener('focus', () => { if (globalSearchInput.value.trim()) renderGlobalSearchDropdown(globalSearchInput.value.trim()); });
+globalSearchInput.addEventListener('keydown', e => { if (e.key === 'Enter') irABusquedaCompleta(globalSearchInput.value.trim()); });
+document.addEventListener('click', e => { if (!e.target.closest('.header-search')) globalSearchResults.classList.remove('open'); });
+
+function renderGlobalSearchDropdown(q) {
+  if (!q) { globalSearchResults.classList.remove('open'); return; }
+  const ql = q.toLowerCase();
+  const found = Store.allRecords().filter(r => [r.codigo, r.wo, r.operario, r.puesto, r.descripcion].join(' ').toLowerCase().includes(ql));
+  globalSearchResults.classList.add('open');
+  if (!found.length) { globalSearchResults.innerHTML = '<div class="sd-empty">Sin resultados en el histórico guardado.</div>'; return; }
+  const porCodigo = new Map();
+  found.forEach(r => { if (!porCodigo.has(r.codigo)) porCodigo.set(r.codigo, []); porCodigo.get(r.codigo).push(r); });
+  const items = [...porCodigo.entries()].slice(0, 8).map(([codigo, recs]) => {
+    const semanas = [...new Set(recs.map(r => r.semana + "'" + r.anio))].slice(0, 3).join(', ');
+    return `<div class="sd-item" data-sd-codigo="${escapeHtml(codigo)}"><b>${escapeHtml(codigo)}</b> — ${escapeHtml(recs[0].descripcion)}<br><span class="muted">${semanas}${recs.length > 1 ? ` · ${recs.length} apariciones` : ''}</span></div>`;
+  }).join('');
+  const masTexto = porCodigo.size > 8 ? `<div class="sd-more" id="sdVerTodos">Ver los ${porCodigo.size} resultados en Búsqueda →</div>` : `<div class="sd-more" id="sdVerTodos">Ver en Búsqueda →</div>`;
+  globalSearchResults.innerHTML = items + masTexto;
+  globalSearchResults.querySelectorAll('[data-sd-codigo]').forEach(el => el.onclick = () => irABusquedaCompleta(el.dataset.sdCodigo));
+  const btnMas = document.getElementById('sdVerTodos');
+  if (btnMas) btnMas.onclick = () => irABusquedaCompleta(q);
+}
+function irABusquedaCompleta(q) {
+  if (!q) return;
+  globalSearchResults.classList.remove('open');
+  showView('busqueda');
+  document.getElementById('searchInput').value = q;
+  doSearch();
+}
+
 /* ---------------------- UI: Operarios ---------------------- */
 function renderOperariosView() {
   const data = Store.load();
@@ -2018,6 +2136,7 @@ function drawPlanificadorTable() {
         actualizarDatalistsPlan();
         renderPlanPreview();
       }
+      if (campo === 'wo') autocompletarDesdeWO(idx);
     });
   });
   tbody.querySelectorAll('[data-plan-quitar]').forEach(b => b.onclick = () => {
@@ -2029,6 +2148,33 @@ function drawPlanificadorTable() {
   });
   actualizarPlanHint();
   renderPlanPreview();
+}
+
+/** Al cargar un WO, busca ese pedido en el "Estado actual" de NetSuite guardado y completa solo
+ *  código, descripción y cantidad planificada — lo único que hay que seguir escribiendo a mano es
+ *  puesto, turno, operario, día y lote. */
+function autocompletarDesdeWO(idx) {
+  const fila = App.planificador.filas[idx];
+  const wos = separarWOsTexto(fila.wo);
+  if (!wos.length) return;
+  const data = Store.load();
+  if (!data.netsuiteEstadoActual) return;
+  const buscado = wos[0];
+  const match = data.netsuiteEstadoActual.rows.find(r => normalizeWO(r.wo) === buscado);
+  if (!match) { marcarWOEncontrado(idx, false); return; }
+  fila.codigo = (match.codigo || '').toUpperCase();
+  fila.descripcion = match.descripcion || fila.descripcion;
+  if (match.planificada != null) fila.cantidad = match.planificada;
+  guardarBorradorPlan();
+  drawPlanificadorTable();
+  marcarWOEncontrado(idx, true);
+}
+function marcarWOEncontrado(idx, encontrado) {
+  const el = document.querySelector(`#tblPlanificadorBody tr[data-plan-fila="${idx}"] [data-campo="wo"]`);
+  if (!el) return;
+  el.style.outline = encontrado ? '2px solid var(--ok)' : '2px solid var(--bad)';
+  el.title = encontrado ? 'Encontrado en el Estado actual de NetSuite: código, descripción y cantidad completados solos.' : 'Ese WO no está en el Estado actual de NetSuite cargado — completalo a mano.';
+  setTimeout(() => { el.style.outline = ''; }, 1500);
 }
 
 function filasPlanValidas() {
