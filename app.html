@@ -399,6 +399,10 @@ select.plan-input.plan-dia-VIERNES,input.plan-input.plan-dia-VIERNES{background:
     <div class="toolbar">
       <select id="operarioSelect"><option value="">Elegí un operario...</option></select>
     </div>
+    <div class="toolbar" style="margin-top:6px;">
+      <input type="text" id="nuevoOperarioNombre" placeholder="Nombre del operario nuevo (ej: PEREZ.M)" style="max-width:280px;">
+      <button class="btn secondary small" id="btnAgregarOperario">+ Agregar operario</button>
+    </div>
   </div>
   <div id="operarioDetalle" style="display:none;">
     <div class="panel">
@@ -802,6 +806,10 @@ const NETSUITE_HEADERS = {
   pendiente: ['cantidad restante'],
   estado: ['estado']
 };
+// Columnas opcionales: si no están, no se rompe la carga (sólo no se puede autocompletar con eso).
+const NETSUITE_HEADERS_OPCIONALES = {
+  lote: ['lote equipo', 'lote']
+};
 const NetsuiteReader = {
   /** Lee la primera hoja con pinta de exportación de NetSuite: encabezados en la fila 1,
    *  identificados por nombre (no por posición de columna, para tolerar que Netsuite reordene columnas). */
@@ -814,13 +822,17 @@ const NetsuiteReader = {
       const idx = headerRow.findIndex(h => aliases.includes(h));
       if (idx >= 0) colIndex[key] = idx + 1;
     }
+    for (const [key, aliases] of Object.entries(NETSUITE_HEADERS_OPCIONALES)) {
+      const idx = headerRow.findIndex(h => aliases.includes(h));
+      if (idx >= 0) colIndex[key] = idx + 1;
+    }
     const faltantes = Object.keys(NETSUITE_HEADERS).filter(k => !colIndex[k]);
     if (faltantes.length) throw new Error('El Excel de NetSuite no tiene las columnas esperadas: ' + faltantes.join(', ') + '. Revisá que sea el export crudo tal cual sale de NetSuite.');
 
     const rows = [];
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
-      const get = key => { const c = row.getCell(colIndex[key]); return c ? c.value : null; };
+      const get = key => { if (!colIndex[key]) return null; const c = row.getCell(colIndex[key]); return c ? c.value : null; };
       const wo = get('wo'), codigo = get('codigo');
       if (!wo && !codigo) return;
       const centroRaw = String(get('centro') || '').trim();
@@ -831,6 +843,7 @@ const NetsuiteReader = {
         codigo: String(codigo || '').trim(),
         descripcion: String(get('descripcion') || '').trim(),
         operacion: String(get('operacion') || '').trim(),
+        lote: String(get('lote') || '').trim(),
         planificada: numOrNull(get('planificada')),
         realizada: numOrNull(get('realizada')),
         pendiente: numOrNull(get('pendiente')),
@@ -1697,6 +1710,75 @@ function openResolveModal(item) {
   };
 }
 function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+
+/** Selector de uno o más operarios para una fila del Planificador. Si el puesto lo cubre más de
+ *  una persona esa semana, se eligen los dos: el trabajo se les acredita a ambos por igual — lo
+ *  que importa es cuánto cumplieron de lo planificado, no repartir piezas entre ellos. */
+function abrirSelectorOperarios(idx) {
+  const data = Store.load();
+  const conocidos = new Set([
+    ...Object.keys(data.operarios),
+    ...Store.allRecords().flatMap(r => separarOperarios(r.operario)),
+    ...App.planificador.filas.flatMap(f => separarOperarios(f.operario))
+  ]);
+  let seleccionados = separarOperarios(App.planificador.filas[idx].operario);
+
+  const root = document.getElementById('modalRoot');
+  const pintar = filtro => {
+    const ql = normPlan(filtro);
+    const nombres = [...conocidos].sort().filter(n => !ql || normPlan(n).includes(ql));
+    const lista = document.getElementById('opPickerList');
+    let html = nombres.map(n => {
+      const marcado = seleccionados.some(s => normPlan(s) === normPlan(n));
+      return `<label style="display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid #f1ece0;cursor:pointer;">
+        <input type="checkbox" data-op-nombre="${escapeHtml(n)}" ${marcado ? 'checked' : ''}> ${escapeHtml(n)}
+      </label>`;
+    }).join('');
+    if (filtro.trim() && !nombres.some(n => normPlan(n) === normPlan(filtro))) {
+      html += `<div class="link-btn" id="opPickerNuevo" style="display:block;padding:7px 4px;">+ Agregar "${escapeHtml(filtro.trim())}" como operario nuevo</div>`;
+    }
+    lista.innerHTML = html || '<p class="muted" style="padding:6px 4px;">Sin coincidencias.</p>';
+    lista.querySelectorAll('[data-op-nombre]').forEach(chk => chk.onchange = () => {
+      const n = chk.dataset.opNombre;
+      if (chk.checked) { if (!seleccionados.some(s => normPlan(s) === normPlan(n))) seleccionados.push(n); }
+      else seleccionados = seleccionados.filter(s => normPlan(s) !== normPlan(n));
+    });
+    const nuevoBtn = document.getElementById('opPickerNuevo');
+    if (nuevoBtn) nuevoBtn.onclick = () => {
+      const n = limpiarCampoPlan('operario', filtro);
+      if (!seleccionados.some(s => normPlan(s) === normPlan(n))) seleccionados.push(n);
+      conocidos.add(n);
+      document.getElementById('opPickerSearch').value = '';
+      pintar('');
+    };
+  };
+
+  root.innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>Operario(s) del trabajo</h3>
+        <p class="muted">Si el puesto lo cubren dos personas esa semana (ej. turno mañana/tarde), elegí las dos — el trabajo se les acredita a ambos.</p>
+        <input type="text" id="opPickerSearch" placeholder="Buscar...">
+        <div id="opPickerList" style="max-height:240px;overflow:auto;margin-top:8px;"></div>
+        <div class="modal-actions">
+          <button class="btn secondary small" id="opPickerCancel">Cancelar</button>
+          <button class="btn small" id="opPickerAplicar">Aplicar</button>
+        </div>
+      </div>
+    </div>`;
+  pintar('');
+  document.getElementById('opPickerSearch').addEventListener('input', e => pintar(e.target.value));
+  document.getElementById('opPickerCancel').onclick = closeModal;
+  document.getElementById('modalOverlay').onclick = e => { if (e.target.id === 'modalOverlay') closeModal(); };
+  document.getElementById('opPickerAplicar').onclick = () => {
+    App.planificador.filas[idx].operario = seleccionados.join('/');
+    closeModal();
+    guardarBorradorPlan();
+    actualizarDatalistsPlan();
+    drawPlanificadorTable();
+  };
+}
+
 /** Sugiere la semana siguiente a la última conocida (simple +1; el usuario la puede editar). */
 function suggestNextSemana(anio, semana) {
   const n = parseInt((semana || 'W0').replace(/\D/g, '')) || 0;
@@ -1960,6 +2042,18 @@ function renderOperariosView() {
   sel.onchange = () => renderOperarioDetalle(sel.value);
   if (sel.value) renderOperarioDetalle(sel.value);
 }
+document.getElementById('btnAgregarOperario').addEventListener('click', () => {
+  const input = document.getElementById('nuevoOperarioNombre');
+  const nombre = limpiarCampoPlan('operario', input.value);
+  if (!nombre) { alert('Escribí un nombre.'); return; }
+  const data = Store.load();
+  if (data.operarios[nombre]) { alert('Ya existe un operario con ese nombre.'); input.value = ''; renderOperariosView(); document.getElementById('operarioSelect').value = nombre; renderOperarioDetalle(nombre); return; }
+  Store.saveOperarioPerfil(nombre, {});
+  input.value = '';
+  renderOperariosView();
+  document.getElementById('operarioSelect').value = nombre;
+  renderOperarioDetalle(nombre);
+});
 
 function renderOperarioDetalle(nombre) {
   const detalle = document.getElementById('operarioDetalle');
@@ -2105,7 +2199,7 @@ function drawPlanificadorTable() {
     return `<tr data-plan-fila="${idx}">
     <td>${inp(idx, 'puesto', 'S-01 / (WMX)', 'dlPlanPuestos')}</td>
     <td>${inp(idx, 'turno', 'MAÑANA', 'dlPlanTurnos')}</td>
-    <td>${inp(idx, 'operario', 'FERREYRA/BUSON', 'dlPlanOperarios')}</td>
+    <td><input class="plan-input" data-idx="${idx}" data-campo="operario" value="${escapeHtml(f.operario || '')}" placeholder="Elegir operario(s)..." readonly style="cursor:pointer;" title="Tocar para elegir uno o más operarios"></td>
     <td><select class="plan-input${diaClase}" data-idx="${idx}" data-campo="dia"><option value="">-</option>${DIAS_PLAN.map(d => `<option value="${d}" ${f.dia === d ? 'selected' : ''}>${d.charAt(0) + d.slice(1).toLowerCase()}</option>`).join('')}</select></td>
     <td>${inp(idx, 'lote', 'ej: ATF U448 x14 (AGO)', 'dlPlanLotes')}</td>
     <td>${inp(idx, 'codigo', 'H0001849')}</td>
@@ -2139,6 +2233,7 @@ function drawPlanificadorTable() {
       if (campo === 'wo') autocompletarDesdeWO(idx);
     });
   });
+  tbody.querySelectorAll('[data-campo="operario"]').forEach(el => el.addEventListener('click', () => abrirSelectorOperarios(parseInt(el.dataset.idx))));
   tbody.querySelectorAll('[data-plan-quitar]').forEach(b => b.onclick = () => {
     App.planificador.filas.splice(parseInt(b.dataset.planQuitar), 1);
     if (!App.planificador.filas.length) App.planificador.filas.push(nuevaFilaPlan());
@@ -2165,6 +2260,7 @@ function autocompletarDesdeWO(idx) {
   fila.codigo = (match.codigo || '').toUpperCase();
   fila.descripcion = match.descripcion || fila.descripcion;
   if (match.planificada != null) fila.cantidad = match.planificada;
+  if (match.lote) fila.lote = match.lote;
   guardarBorradorPlan();
   drawPlanificadorTable();
   marcarWOEncontrado(idx, true);
