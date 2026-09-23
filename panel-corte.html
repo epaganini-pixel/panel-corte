@@ -1280,10 +1280,12 @@ async function saveEditDevice(){
    exponerlas a mano para que los botones funcionen. */
 Object.assign(window, {
   addPieceRow, cancelEditDevice, cancelEditPiece, closeCreateModal, closeDetailModal,
-  deleteDevice, deleteDeviceFromDetail, downloadDxf, downloadAllDxf, downloadAllDxfCurrent, handleApDxfPick, handleEdImagePick,
+  deleteDevice, deleteDeviceFromDetail, downloadDxf, downloadAllDxf, downloadAllDxfCurrent,
+  finalizeDevice, finalizeDeviceCurrent, handleApDxfPick, handleEdImagePick,
   handleImagePick, handleRowDxfPick, markRemoveDeviceImage, markRemoveDxf, moveDeviceTo,
-  notifyDoneCurrent, openCreateModal, openDetailModal, removePiece, saveEditDevice, setApType, setRowType,
-  startEditPiece, submitAddPiece, submitDevice, toggleEditDevice
+  notifyDoneCurrent, openCreateModal, openDetailModal, removePiece, reopenDeviceCurrent,
+  saveEditDevice, setApType, setRowType, startEditPiece, submitAddPiece, submitDevice,
+  toggleEditDevice, toggleHistory
 });
 
 loadDevices();
