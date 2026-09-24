@@ -2245,9 +2245,22 @@ function drawPlanificadorTable() {
   renderPlanPreview();
 }
 
+/** Achica el lote/kit de NetSuite al formato corto que usa el planificador: de
+ *  "BR U118 x5 - PLAN JULIO AX3 2026" a "BR U118 x5 (JUL)" — a los operarios y al
+ *  planificador les alcanza con el mes, no necesitan saber que es "del plan" ni la planta/año.
+ *  Si el texto no tiene ese patrón (son unos pocos casos especiales, ej. "TCO 2025"), se deja tal cual. */
+const MESES_LARGOS_A_ABR = { ENERO: 'ENE', FEBRERO: 'FEB', MARZO: 'MAR', ABRIL: 'ABR', MAYO: 'MAY', JUNIO: 'JUN', JULIO: 'JUL', AGOSTO: 'AGO', SEPTIEMBRE: 'SEP', OCTUBRE: 'OCT', NOVIEMBRE: 'NOV', DICIEMBRE: 'DIC' };
+function acortarLote(loteCompleto) {
+  const m = String(loteCompleto || '').match(/^(.*?)\s*-\s*PLAN\s+([A-ZÁÉÍÓÚ]+)\b/i);
+  if (!m) return loteCompleto;
+  const mesAbr = MESES_LARGOS_A_ABR[m[2].toUpperCase()];
+  if (!mesAbr) return loteCompleto;
+  return `${m[1].trim()} (${mesAbr})`;
+}
+
 /** Al cargar un WO, busca ese pedido en el "Estado actual" de NetSuite guardado y completa solo
- *  código, descripción y cantidad planificada — lo único que hay que seguir escribiendo a mano es
- *  puesto, turno, operario, día y lote. */
+ *  código, descripción, cantidad planificada y lote (ya acortado) — lo único que hay que seguir
+ *  escribiendo a mano es puesto, turno, operario y día. */
 function autocompletarDesdeWO(idx) {
   const fila = App.planificador.filas[idx];
   const wos = separarWOsTexto(fila.wo);
@@ -2260,7 +2273,7 @@ function autocompletarDesdeWO(idx) {
   fila.codigo = (match.codigo || '').toUpperCase();
   fila.descripcion = match.descripcion || fila.descripcion;
   if (match.planificada != null) fila.cantidad = match.planificada;
-  if (match.lote) fila.lote = match.lote;
+  if (match.lote) fila.lote = acortarLote(match.lote);
   guardarBorradorPlan();
   drawPlanificadorTable();
   marcarWOEncontrado(idx, true);
