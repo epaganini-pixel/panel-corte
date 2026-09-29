@@ -103,6 +103,9 @@
   .badge.plasma{background:#fbeee5;color:var(--plasma);}
   .badge.laser{background:#e7f1f0;color:var(--laser);}
 
+  .thickness-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px;}
+  .thickness-pill{background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text);font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;font-family:'IBM Plex Mono',monospace;}
+
   .progress-row{margin-top:10px;}
   .progress-text{font-size:11px;color:var(--text-muted);margin-bottom:4px;display:flex;justify-content:space-between;}
   .progress-bar{height:5px;border-radius:3px;background:var(--border-soft);overflow:hidden;}
@@ -528,7 +531,8 @@ function pieceStats(dev){
   const done = dev.pieces.filter(p=>p.done).length;
   const plasma = dev.pieces.filter(p=>p.cutType==='plasma').length;
   const laser = dev.pieces.filter(p=>p.cutType==='laser').length;
-  return {total, done, plasma, laser};
+  const thicknesses = [...new Set(dev.pieces.map(p=>p.thickness))].sort((a,b)=>a-b);
+  return {total, done, plasma, laser, thicknesses};
 }
 
 function render(){
@@ -645,6 +649,7 @@ function renderCard(d, colId){
   const imgHtml = imgSrc ? `<img src="${imgSrc}" class="card-img">` : `<div class="card-img-empty">${d.hasImage?'cargando…':'sin foto'}</div>`;
   const delBtn = isCutterView ? '' : `<button class="icon-btn del" title="Eliminar dispositivo" onclick="event.stopPropagation(); deleteDevice('${d.id}')">🗑</button>`;
   const finalizeBtn = (colId==='cortados' && !isCutterView) ? `<button class="icon-btn" title="Finalizar y archivar" onclick="event.stopPropagation(); finalizeDevice('${d.id}')">✔</button>` : '';
+  const thicknessHtml = s.thicknesses.length ? `<div class="thickness-row">${s.thicknesses.map(t=>`<span class="thickness-pill">${t} mm</span>`).join('')}</div>` : '';
 
   card.innerHTML = `
     <div class="card-top">
@@ -658,6 +663,7 @@ function renderCard(d, colId){
         </div>
       </div>
     </div>
+    ${thicknessHtml}
     ${s.total ? `
     <div class="progress-row">
       <div class="progress-text"><span>${s.done}/${s.total} piezas cortadas</span><span>${pct}%</span></div>
@@ -681,7 +687,7 @@ function escapeHtml(s){
 
 function renderStats(){
   const totalDev = devices.length;
-  const pendientesDev = devices.filter(d=>d.status!=='cortados').length;
+  const pendientesDev = devices.filter(d=>d.status!=='cortados' && d.status!=='terminado').length;
   let plasma=0, laser=0;
   devices.forEach(d=> d.pieces.forEach(p=>{ if(p.cutType==='plasma') plasma++; else if(p.cutType==='laser') laser++; }));
   document.getElementById('stats').innerHTML = `
