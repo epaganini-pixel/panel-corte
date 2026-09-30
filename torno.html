@@ -148,6 +148,10 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 .chart-title{font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:12px;font-weight:600;}
 .stats-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
 .chart-empty{font-size:12px;color:var(--text-muted);text-align:center;padding:20px;}
+.section-title.collapsible,.subsection-title.collapsible{cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none;}
+.section-title.collapsible:hover,.subsection-title.collapsible:hover{color:var(--text);}
+.section-chevron{display:inline-block;font-size:10px;transition:transform 0.15s;}
+.section-chevron.open{transform:rotate(90deg);}
 </style>
 </head>
 <body>
@@ -172,8 +176,8 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 <div class="piece-list" id="activeList">
 <div class="loading">Cargando piezas…</div>
 </div>
-<h2 class="section-title">Terminadas</h2>
-<div class="piece-list" id="finishedList"></div>
+<h2 class="section-title collapsible" onclick="toggleFinishedList('pieza')">Terminadas <span id="finishedCount"></span><span class="section-chevron" id="finishedChevron">▸</span></h2>
+<div class="piece-list" id="finishedList" style="display:none"></div>
 
 <h2 class="section-title">Retrabajos / Trabajos extras</h2>
 <div class="toolbar" id="extraToolbar">
@@ -183,8 +187,8 @@ h3.subsection-title{font-size:12px;color:var(--text-muted);text-transform:upperc
 <div class="piece-list" id="extraActiveList">
 <div class="loading">Cargando…</div>
 </div>
-<h3 class="subsection-title">Terminadas</h3>
-<div class="piece-list" id="extraFinishedList"></div>
+<h3 class="subsection-title collapsible" onclick="toggleFinishedList('extra')">Terminadas <span id="extraFinishedCount"></span><span class="section-chevron" id="extraFinishedChevron">▸</span></h3>
+<div class="piece-list" id="extraFinishedList" style="display:none"></div>
 
 <h2 class="section-title">Estadísticas de retrabajos</h2>
 <div class="chip-picker" id="statsRangePicker" style="margin-bottom:10px"></div>
@@ -339,6 +343,12 @@ let pendingColor = null;
 let editingPieceId = null;
 let dragPieceId = null;
 let openRowId = null;
+let finishedOpen = false;
+let extraFinishedOpen = false;
+function toggleFinishedList(kind){
+if(kind==='extra'){ extraFinishedOpen = !extraFinishedOpen; renderExtraFinishedList(); }
+else{ finishedOpen = !finishedOpen; renderFinishedList(); }
+}
 const COLOR_PALETTE = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#16a085','#3498db','#9b59b6','#7f8c8d'];
 function renderColorPicker(selected){
 const wrap = document.getElementById('colorPicker');
@@ -825,6 +835,10 @@ items.forEach(p=> list.appendChild(renderPieceCard(p)));
 function renderExtraFinishedList(){
 const list = document.getElementById('extraFinishedList');
 const items = getFinishedSorted('extra');
+document.getElementById('extraFinishedCount').textContent = items.length ? `(${items.length})` : '';
+document.getElementById('extraFinishedChevron').classList.toggle('open', extraFinishedOpen);
+list.style.display = extraFinishedOpen ? 'flex' : 'none';
+if(!extraFinishedOpen) return;
 list.innerHTML = '';
 if(items.length===0){
 list.innerHTML = `<div class="empty-msg">Todavía no hay trabajos extra terminados</div>`;
@@ -977,6 +991,10 @@ await queueSave();
 function renderFinishedList(){
 const list = document.getElementById('finishedList');
 const items = getFinishedSorted('pieza');
+document.getElementById('finishedCount').textContent = items.length ? `(${items.length})` : '';
+document.getElementById('finishedChevron').classList.toggle('open', finishedOpen);
+list.style.display = finishedOpen ? 'flex' : 'none';
+if(!finishedOpen) return;
 list.innerHTML = '';
 if(items.length===0){
 list.innerHTML = `<div class="empty-msg">Todavía no hay piezas terminadas</div>`;
@@ -1292,7 +1310,8 @@ Object.assign(window, {
 openCreateModal, closeCreateModal, startEditPiece, handleIconPick, handlePdfPick, submitPiece,
 startPiece, pausePiece, finishPiece, reopenPiece, viewPdf, deletePieceConfirm, toggleExpand,
 addComment, removeComment,
-openExtraModal, closeExtraModal, startEditExtra, submitExtra
+openExtraModal, closeExtraModal, startEditExtra, submitExtra,
+toggleFinishedList
 });
 loadPieces();
 loadExtraCatalog();
