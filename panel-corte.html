@@ -23,6 +23,7 @@
     --anadidos:#5678a3;
     --cortados:#6ea675;
     --danger:#c4564f;
+    --template:#8a5fc2;
     --shadow: 0 1px 2px rgba(40,35,25,0.04), 0 4px 14px rgba(40,35,25,0.05);
   }
 
@@ -72,6 +73,8 @@
   .btn-primary:hover{background:var(--brand-dark);}
   .btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border);padding:10px 16px;}
   .btn-secondary:hover{border-color:var(--text-muted);}
+  .btn-template{background:#f2ecf8;color:var(--template);border:1px solid #ddc9f2;padding:10px 18px;display:flex;align-items:center;gap:8px;}
+  .btn-template:hover{background:#e9defa;}
   .btn-ghost{background:transparent;color:var(--text-muted);padding:6px 10px;font-size:11.5px;text-decoration:underline;}
   .btn-ghost:hover{color:var(--text);}
 
@@ -102,6 +105,7 @@
   .badge{display:inline-block;padding:1.5px 8px;border-radius:9px;font-size:10px;font-weight:600;}
   .badge.plasma{background:#fbeee5;color:var(--plasma);}
   .badge.laser{background:#e7f1f0;color:var(--laser);}
+  .badge.template{background:#f2ecf8;color:var(--template);}
 
   .thickness-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px;}
   .thickness-pill{background:var(--panel-alt);border:1px solid var(--border-soft);color:var(--text);font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:9px;font-family:'IBM Plex Mono',monospace;}
@@ -223,6 +227,7 @@
 
   <div class="toolbar" id="toolbar">
     <button class="btn-primary" onclick="openCreateModal()">＋ Nuevo dispositivo</button>
+    <button class="btn-template" onclick="openCreateModal(true)">📐 Agregar plantilla</button>
   </div>
 
   <div class="board" id="board">
@@ -240,14 +245,14 @@
 <div class="overlay" id="createOverlay">
   <div class="modal">
     <button class="close-x" onclick="closeCreateModal()">✕</button>
-    <h2>Nuevo dispositivo</h2>
-    <div class="modal-sub">Cargá el dispositivo y andá agregando todas sus piezas.</div>
+    <h2 id="createModalTitle">Nuevo dispositivo</h2>
+    <div class="modal-sub" id="createModalSub">Cargá el dispositivo y andá agregando todas sus piezas.</div>
 
     <div class="field">
       <label>Código / nombre del dispositivo</label>
       <input type="text" id="d-code" placeholder="Ej: DISPOSITIVO-014">
     </div>
-    <div class="field">
+    <div class="field" id="imgFieldWrap">
       <label>Imagen (opcional)</label>
       <div class="img-drop" onclick="document.getElementById('d-img').click()">
         <span id="imgDropText">Tocar para elegir imagen</span>
@@ -415,6 +420,7 @@ let createDxfMap = {};     // rowId -> {name, data}
 let apType = 'plasma';
 let apDxf = null;
 let openDeviceId = null;
+let creatingTemplate = false;
 let settings = { cutterEmail: '', notifyEmail: '' };
 
 const params = new URLSearchParams(window.location.search);
@@ -723,8 +729,12 @@ async function deleteDevice(id){
 }
 
 /* ---------- crear dispositivo ---------- */
-function openCreateModal(){
+function openCreateModal(isTemplate){
   if(isCutterView) return;
+  creatingTemplate = !!isTemplate;
+  document.getElementById('createModalTitle').textContent = creatingTemplate ? 'Nueva plantilla' : 'Nuevo dispositivo';
+  document.getElementById('createModalSub').textContent = creatingTemplate ? 'Cargá las piezas y cantidades de la plantilla (sin foto).' : 'Cargá el dispositivo y andá agregando todas sus piezas.';
+  document.getElementById('imgFieldWrap').style.display = creatingTemplate ? 'none' : 'block';
   document.getElementById('createOverlay').classList.add('open');
   document.getElementById('d-code').value='';
   pendingImage = null;
@@ -868,7 +878,7 @@ async function submitDevice(){
   });
 
   const deviceId = uid('dev');
-  const newDevice = { id: deviceId, code, hasImage: !!pendingImage, status:'espera', createdAt: Date.now(), pieces, notifyEmail: notifyEmail || null, notifyDoneSent:false };
+  const newDevice = { id: deviceId, code, hasImage: !!pendingImage, status:'espera', createdAt: Date.now(), pieces, notifyEmail: notifyEmail || null, notifyDoneSent:false, isTemplate: creatingTemplate };
   devices.push(newDevice);
   const imgToSave = pendingImage;
   if(imgToSave) imageCache[deviceId] = imgToSave;
@@ -887,7 +897,7 @@ async function submitDevice(){
   await queueSave();
   if(imgToSave) await setFile('img:'+deviceId, imgToSave);
   for(const dx of dxfToSave){ await setFile('dxf:'+dx.id, JSON.stringify(dx.data)); }
-  showToast('Dispositivo creado.');
+  showToast(creatingTemplate ? 'Plantilla creada.' : 'Dispositivo creado.');
 }
 
 function openMailDraft(device, to){
